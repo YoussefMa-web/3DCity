@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "source": "D:\\NETCOM_datacenter_ville_v6.blend",
+  "space": "three-y-up",
+  "sections": [
+    { "id": "site", "file": "site.glb" },
+    { "id": "telecom", "file": "telecom.glb" },
+    { "id": "datacenter", "file": "datacenter.glb" },
+    { "id": "datacenter-exterior", "file": "datacenter-exterior.glb" },
+    { "id": "reseau", "file": "reseau.glb" },
+    { "id": "poste", "file": "poste.glb" },
+    { "id": "noc", "file": "noc.glb" },
+    { "id": "solar", "file": "solar.glb" },
+    { "id": "carport", "file": "carport.glb" }
+  ]
+}

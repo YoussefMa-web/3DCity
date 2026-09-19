@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>NETIS — Campus interactif</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+      <div id="icons" class="icon-layer"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo">N</span>
+          <div>
+            <strong>NETIS</strong>
+            <small>Campus interactif</small>
+          </div>
+        </div>
+        <nav id="brand-bar" class="brand-bar" aria-label="Univers NETIS"></nav>
+      </header>
+
+      <section id="parcours" class="parcours" hidden>
+        <div class="parcours-head">
+          <span id="parcours-label">Parcours</span>
+          <button id="back-overview" type="button">Vue d’ensemble</button>
+        </div>
+        <div id="step-icons" class="step-icons"></div>
+        <div class="parcours-nav">
+          <button id="step-prev" type="button">Précédent</button>
+          <button id="step-next" type="button">Suivant</button>
+        </div>
+      </section>
+
+      <aside id="panel" class="panel" hidden>
+        <button id="panel-close" type="button" aria-label="Fermer">×</button>
+        <div id="panel-icon" class="panel-icon"></div>
+        <p id="panel-kicker" class="kicker"></p>
+        <h2 id="panel-title"></h2>
+        <div id="panel-stats" class="panel-stats" hidden></div>
+        <p id="panel-summary"></p>
+        <ul id="panel-points"></ul>
+        <div id="panel-noc" class="panel-noc" hidden></div>
+      </aside>
+
+      <div id="boot" class="boot" aria-live="polite">
+        <div class="boot-inner">
+          <img src="/netis_logo.png" alt="NETIS Group" class="boot-logo" />
+          <p class="boot-subtitle">SEE a Better Future</p>
+          <div class="boot-track"><div id="boot-bar" class="boot-bar"></div></div>
+          <div class="boot-meta">
+            <span id="boot-label" class="boot-label">LOADING CAMPUS — 0%</span>
+            <span id="boot-message" class="boot-message">Assembling the interactive campus…</span>
+          </div>
+          <button id="boot-enter-btn" class="boot-enter-btn" type="button" hidden>
+            ENTER THE NETIS CAMPUS →
+          </button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
