@@ -85,6 +85,11 @@ export class CampusApp {
   private searchSelectedIndex = 0
   private filteredActivities: Activity[] = []
 
+  private readonly campusTargetBounds = new THREE.Box3(
+    new THREE.Vector3(-220, 0, -320),
+    new THREE.Vector3(340, 35, -110),
+  )
+
   constructor(canvas: HTMLCanvasElement) {
     this.clock.connect(document)
     this.renderer = new THREE.WebGLRenderer({
@@ -108,8 +113,8 @@ export class CampusApp {
     this.atmosphere = new Atmosphere(this.scene, this.renderer)
 
     this.camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.8, 4200)
-    const start = blenderToThree(-210, 40, 95)
-    const look = blenderToThree(-40, 210, 6)
+    const start = blenderToThree(-180, 80, 68)
+    const look = blenderToThree(-40, 210, 5)
     this.camera.position.copy(start)
     this.camera.lookAt(look)
 
@@ -117,16 +122,20 @@ export class CampusApp {
     this.controls.target.copy(look)
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.08
-    this.controls.maxPolarAngle = Math.PI * 0.495
+    this.controls.maxPolarAngle = Math.PI * 0.44 // Ne sors pas sous le sol
     this.controls.minPolarAngle = 0.08
-    this.controls.minDistance = 8
-    this.controls.maxDistance = 780
+    this.controls.minDistance = 5 // Zoom proche
+    this.controls.maxDistance = 240 // Bloqué sur le campus, impossible de s'éloigner dans le vide
     this.controls.zoomSpeed = 0.9
     this.controls.rotateSpeed = 0.85
-    this.controls.panSpeed = 0.85
+    this.controls.panSpeed = 0.75
     this.controls.update()
     this.controls.addEventListener('start', () => {
       this.orbiting = true
+    })
+    this.controls.addEventListener('change', () => {
+      this.controls.target.clamp(this.campusTargetBounds.min, this.campusTargetBounds.max)
+      this.camera.position.y = Math.max(1.8, this.camera.position.y)
     })
     this.controls.addEventListener('end', () => {
       this.orbiting = false
@@ -1048,7 +1057,7 @@ export class CampusApp {
     const path = document.querySelector('#parcours') as HTMLElement | null
     if (path) path.hidden = true
     document.querySelectorAll('.brand-btn').forEach((btn) => btn.classList.remove('is-active'))
-    this.fly(blenderToThree(-210, 40, 95), blenderToThree(-40, 210, 6))
+    this.fly(blenderToThree(-180, 80, 68), blenderToThree(-40, 210, 5))
     this.syncMarkers()
   }
 
@@ -1099,7 +1108,11 @@ export class CampusApp {
   private frame() {
     this.clock.update()
     const dt = this.clock.getDelta()
-    if (!this.flying) this.controls.update()
+    if (!this.flying) {
+      this.controls.target.clamp(this.campusTargetBounds.min, this.campusTargetBounds.max)
+      this.camera.position.y = Math.max(1.8, this.camera.position.y)
+      this.controls.update()
+    }
     const dist = this.camera.position.distanceTo(this.controls.target)
     this.atmosphere.updateViewFog(dist, dt)
 
