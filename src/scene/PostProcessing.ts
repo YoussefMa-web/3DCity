@@ -182,11 +182,16 @@ export class PostProcessing {
   }
 
   setMoving(isMoving: boolean) {
-    // GTAO only when settled — keep blend high enough that contact AO reads in stills.
+    // Contact AO and bloom are the expensive passes. Drop both while the
+    // camera flies or orbits, then restore the settled look.
     this.gtaoPass.enabled = !isMoving
+    this.bloomPass.enabled = !isMoving
     if (!isMoving) {
       this.gtaoPass.blendIntensity = RENDER.ao.blendIntensity
       this.gtaoPass.updateGtaoMaterial({ samples: RENDER.ao.samples })
+      this.bloomPass.strength = RENDER.bloom.strength
+      this.bloomPass.radius = RENDER.bloom.radius
+      this.bloomPass.threshold = RENDER.bloom.threshold
     }
   }
 

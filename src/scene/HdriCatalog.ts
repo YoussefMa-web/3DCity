@@ -42,8 +42,8 @@ export const HDRI_PRESETS: readonly HdriPreset[] = [
     file: 'sky_clouds_2k.hdr',
     url: `${import.meta.env.BASE_URL}hdri/sky_clouds_2k.hdr`,
     label: 'Daylight Vivid Clouds 2K',
-    env: 0.68,
-    bg: 0.92,
+    env: 0.58,
+    bg: 1.0,
     alignSun: true,
   },
   {

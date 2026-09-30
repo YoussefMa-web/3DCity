@@ -22,10 +22,18 @@ export function hideGiants(root: THREE.Object3D) {
 }
 
 export function hideInteriors(root: THREE.Object3D) {
+  setInteriorVisibility(root, false)
+}
+
+export function setInteriorVisibility(root: THREE.Object3D, visible: boolean) {
   root.traverse((obj) => {
     if (obj.name === 'sky') return
-    if (INTERIOR.test(obj.name)) obj.visible = false
+    if (INTERIOR.test(obj.name)) obj.visible = visible
   })
+}
+
+export function isInteriorName(name: string) {
+  return INTERIOR.test(name)
 }
 
 const GROUND_MESH = /^(trettoir|asphalte|voirie)$/i

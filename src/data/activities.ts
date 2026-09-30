@@ -1,8 +1,25 @@
+import { applyActivityDetails } from './activityDetails'
+
 export type BrandId = 'solar' | 'telecom' | 'data'
 
 export interface ActivityStat {
   value: string
   label: string
+}
+
+export interface ActivityPlace {
+  id: string
+  title: string
+  summary: string
+  points: string[]
+  benefits?: string[]
+  anchor: [number, number, number]
+  cam: [number, number, number]
+  target: [number, number, number]
+  fov?: number
+  minDistance?: number
+  maxDistance?: number
+  flowKind?: 'fiber' | 'power'
 }
 
 export interface Activity {
@@ -13,8 +30,16 @@ export interface Activity {
   summary: string
   points: string[]
   stats?: ActivityStat[]
+  benefits?: string[]
   /** Affiche le panneau salle NOC (écrans, SLA, inventaire). */
   nocRoom?: boolean
+  /** Coupe et visite de la salle déjà contenue dans le modèle. */
+  enterInterior?: boolean
+  flowKind?: 'fiber' | 'power'
+  fov?: number
+  minDistance?: number
+  maxDistance?: number
+  places?: ActivityPlace[]
   icon: string
   /** Blender Z-up anchor. */
   anchor: [number, number, number]
@@ -505,3 +530,10 @@ export function activitiesOf(brand: BrandId) {
 export function brandById(id: BrandId) {
   return BRANDS.find((brand) => brand.id === id)!
 }
+
+export function placeById(activity: Activity, placeId: string | null | undefined) {
+  if (!placeId) return undefined
+  return activity.places?.find((place) => place.id === placeId)
+}
+
+applyActivityDetails(ACTIVITIES)

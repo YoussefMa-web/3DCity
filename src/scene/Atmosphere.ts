@@ -13,7 +13,7 @@ import {
   type HdriId,
 } from './HdriCatalog'
 
-const GROUND_MIST = 0xf0ebe0
+const GROUND_MIST = 0xf2f4f6
 
 /**
  * Clean studio daylight — matches Blender maquette reference shots
@@ -124,7 +124,7 @@ export class Atmosphere {
       if (this.envMap) this.envMap.dispose()
       this.envMap = env
       this.scene.environment = env
-      this.scene.environmentIntensity = 1.45
+      this.scene.environmentIntensity = 1.18
       if (peak) {
         this.scene.environmentRotation.set(0, yawToAlign(this.sunDir, peak.dir), 0)
       }
@@ -161,7 +161,7 @@ export class Atmosphere {
     if (this.hdriHorizon) {
       this.hazeColor
         .copy(this.hdriHorizon)
-        .lerp(new THREE.Color().setRGB(...RENDER.fog.color, THREE.SRGBColorSpace), 0.35)
+        .lerp(new THREE.Color().setRGB(...RENDER.fog.color, THREE.SRGBColorSpace), 0.18)
     } else {
       this.hazeColor.setRGB(...RENDER.fog.color, THREE.SRGBColorSpace)
     }
@@ -428,8 +428,7 @@ export class Atmosphere {
       this.hdriPeak = brightestUpperDirection(hdr)
       this.hdriHorizon = horizonBandColor(hdr)
       if (this.hdriHorizon) {
-        // Warm the sampled horizon slightly — pure-sky HDRIs often read cold grey.
-        this.hazeColor.copy(this.hdriHorizon).lerp(new THREE.Color().setRGB(...RENDER.fog.color, THREE.SRGBColorSpace), 0.35)
+        this.hazeColor.copy(this.hdriHorizon).lerp(new THREE.Color().setRGB(...RENDER.fog.color, THREE.SRGBColorSpace), 0.18)
       }
       this.hdriYaw = 0
       if (preset.alignSun && this.hdriPeak) {

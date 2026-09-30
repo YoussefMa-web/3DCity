@@ -16,7 +16,7 @@ const hero = QUALITY === 'hero'
 
 export const RENDER = {
   /** AgX holds architectural whites better than ACES (softer highlight rolloff). */
-  exposure: 1.05,
+  exposure: 1.06,
   interiorExposure: 0.85,
   /** Cap DPR — Retina at 2× forces near-4K fullscreen GTAO/bloom every frame. */
   pixelRatioMax: hero ? 2 : 1.75,
@@ -24,18 +24,18 @@ export const RENDER = {
   anisotropyCap: 16,
 
   sun: {
-    /** Strong warm key so directional shadows read on roads/façades. */
-    color: 0xfff0d6,
-    intensity: 3.2,
-    elevation: 0.5,
+    /** Neutral daylight key — warm enough for façades, without the orange cast. */
+    color: 0xfff6e6,
+    intensity: 2.9,
+    elevation: 0.52,
     azimuth: 0.22,
-    /** Soft warm bounce — cool blue fill reads grey on concrete. */
-    fillColor: 0xffe4c4,
-    fill: 0.28,
-    hemiSky: 0xfff1e2,
-    hemiGround: 0x6a7450,
-    hemi: 0.38,
-    ambient: 0.08,
+    /** Cool-neutral fill. A fully blue fill greys the concrete. */
+    fillColor: 0xe6eef6,
+    fill: 0.34,
+    hemiSky: 0xf3f6fb,
+    hemiGround: 0x7d8868,
+    hemi: 0.46,
+    ambient: 0.09,
   },
 
   shadow: {
@@ -56,30 +56,30 @@ export const RENDER = {
   },
 
   ao: {
-    radius: 3.4,
-    distanceExponent: 1.45,
-    thickness: 1.85,
-    scale: 1.35,
-    samples: hero ? 24 : 20,
+    radius: 2.2,
+    distanceExponent: 1.6,
+    thickness: 1.4,
+    scale: 1.12,
+    samples: hero ? 16 : 10,
     distanceFallOff: 1.0,
     screenSpaceRadius: false,
-    /** Settled contact shadows — must be high enough to see in stills. */
-    blendIntensity: hero ? 1.2 : 1.12,
-    resolutionScale: hero ? 1 : 0.95,
+    /** Softer contact shadows — full samples only once the camera settles. */
+    blendIntensity: hero ? 0.82 : 0.72,
+    resolutionScale: hero ? 0.85 : 0.7,
     pd: {
       lumaPhi: 10,
-      depthPhi: 1.85,
-      normalPhi: 2.8,
-      radius: 8,
+      depthPhi: 2,
+      normalPhi: 3,
+      radius: 5,
       rings: 2,
-      samples: 16,
+      samples: 10,
     },
   },
 
   bloom: {
-    strength: 0.07,
-    radius: 0.3,
-    threshold: 1.15,
+    strength: 0.032,
+    radius: 0.22,
+    threshold: 1.38,
   },
 
   fog: {
@@ -88,7 +88,7 @@ export const RENDER = {
     nearMin: 160,
     farMin: 780,
     /** Soft horizon haze — sampled from HDRI when available. */
-    color: [0.86, 0.89, 0.92] as const,
+    color: [0.9, 0.925, 0.95] as const,
     keys: [
       { d: 18, near: 380, far: 1400 },
       { d: 55, near: 340, far: 1250 },
@@ -141,16 +141,16 @@ export const RENDER = {
   },
 
   grade: {
-    vignette: 0.07,
-    grain: 0.0015,
+    vignette: 0.055,
+    grain: 0.0012,
     aberration: 0,
-    /** Warm lift — kills grey cast without washing shadows. */
-    lift: [0.01, 0.005, -0.006] as const,
-    gain: [1.05, 1.03, 0.99] as const,
-    saturation: 1.16,
-    contrast: 1.15,
-    sharpness: 0.22,
-    sCurve: 0.28,
+    /** Slight cool lift — pulls the orange cast back without cloning the old grade. */
+    lift: [0.002, 0.001, 0.006] as const,
+    gain: [1.02, 1.025, 1.03] as const,
+    saturation: 1.12,
+    contrast: 1.08,
+    sharpness: 0.14,
+    sCurve: 0.2,
   },
 
   groundMacro: {

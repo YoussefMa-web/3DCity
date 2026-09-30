@@ -241,9 +241,15 @@
         <div class="panel-body">
           <!-- Tab 1: Overview -->
           <div id="panel-tab-overview" class="tab-pane is-active">
+            <div id="panel-places" class="place-row" hidden></div>
             <p id="panel-summary" class="panel-summary"></p>
             <div class="panel-section-title">Points Clés & Ingénierie</div>
             <ul id="panel-points" class="panel-points-list"></ul>
+            <div id="panel-benefits" class="benefit-block" hidden></div>
+            <div id="panel-flow" class="flow-legend" hidden></div>
+            <button id="panel-enter-interior" class="panel-action-btn panel-action-primary panel-enter" type="button" hidden>
+              Entrer dans la salle
+            </button>
           </div>
 
           <!-- Tab 2: Specs & KPIs -->
@@ -285,6 +291,18 @@
           </div>
         </div>
       </aside>
+
+      <div id="interior-bar" class="interior-bar" hidden>
+        <div class="interior-bar-copy">
+          <strong id="interior-title">Salle technique</strong>
+          <span id="interior-step">1 / 1</span>
+        </div>
+        <div class="interior-bar-actions">
+          <button id="interior-prev" class="panel-action-btn" type="button">←</button>
+          <button id="interior-next" class="panel-action-btn" type="button">→</button>
+          <button id="interior-exit" class="panel-action-btn panel-action-primary" type="button">Quitter l’intérieur</button>
+        </div>
+      </div>
 
       <!-- Technician Inspection HUD Card -->
       <div id="tech-card" class="tech-card" hidden>

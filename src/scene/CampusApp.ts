@@ -2,13 +2,17 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { ACTIVITIES, BRANDS, activitiesOf, brandById, type Activity, type BrandId } from '../data/activities'
+import { ACTIVITIES, BRANDS, activitiesOf, brandById, placeById, type Activity, type ActivityPlace, type BrandId } from '../data/activities'
+import { DC_INTERIOR_STEPS, type InteriorStepDef } from '../data/interior'
 import { NOC_MONITOR_SITES, NOC_OVERVIEW } from '../data/nocRoom'
 import { iconSvg } from '../ui/icons'
 import { sound } from '../ui/audio'
 import { Atmosphere } from './Atmosphere'
+import { CameraDirector, type CameraShot } from './CameraDirector'
+import { Cutaway } from './Cutaway'
 import { GlassPerformance } from './GlassPerformance'
-import { applyCampusAsphalt, applyCampusGrass, finishMesh, hideInteriors } from './look'
+import { applyCampusAsphalt, applyCampusGrass, finishMesh, hideInteriors, isInteriorName, setInteriorVisibility } from './look'
+import { NetworkFlows } from './NetworkFlows'
 import { addWorldGround } from './WorldGround'
 import { PostProcessing } from './PostProcessing'
 import { RENDER, QUALITY } from './RenderSettings'
@@ -64,12 +68,16 @@ export class CampusApp {
   private readonly atmosphere: Atmosphere
   private readonly glassPerf = new GlassPerformance()
   private readonly postProcessing: PostProcessing
+  private readonly director: CameraDirector
+  private readonly cutaway: Cutaway
+  private readonly flows = new NetworkFlows()
   private readonly traffic = new TrafficSystem()
   private readonly technicians = new TechnicianSystem()
   private readonly markers = new Map<string, HTMLButtonElement>()
   
   private activeBrand: BrandId | null = null
   private currentActivity: Activity | null = null
+  private currentPlaceId: string | null = null
   private nocSiteIndex: number | null = null
   private step = 0
   private flying = false
@@ -79,6 +87,10 @@ export class CampusApp {
   private isTouring = false
   private tourTimer = 0
   private readonly TOUR_STEP_DURATION = 8000 // 8 seconds per POI during auto-tour
+  private elapsed = 0
+  private interiorMode = false
+  private interiorIndex = 0
+  private interiorSteps: Array<InteriorStepDef & { objects: THREE.Object3D[] }> = []
   
   private shadowBakeFrames = 0
   private searchFilter: 'all' | BrandId = 'all'
@@ -130,6 +142,9 @@ export class CampusApp {
     this.controls.rotateSpeed = 0.85
     this.controls.panSpeed = 0.75
     this.controls.update()
+    this.director = new CameraDirector(this.camera, this.controls)
+    this.cutaway = new Cutaway(this.renderer)
+    this.scene.add(this.flows.group)
     this.controls.addEventListener('start', () => {
       this.orbiting = true
     })
@@ -270,6 +285,8 @@ export class CampusApp {
       this.atmosphere.setCampusFog(center, radius)
       this.atmosphere.updateFocusedShadows(this.controls.target, this.camera.position.distanceTo(this.controls.target), true)
       this.technicians.init(this.scene)
+      await this.flows.load()
+      if (!world.isEmpty()) this.flows.pruneOutside(world)
       this.queueShadowBake()
       this.postProcessing.setMoving(false)
       this.ready = true
@@ -407,6 +424,22 @@ export class CampusApp {
         sound.playWhoosh()
         this.focus(this.currentActivity)
       }
+    })
+    document.querySelector('#panel-enter-interior')?.addEventListener('click', () => {
+      sound.playWhoosh()
+      this.enterInterior()
+    })
+    document.querySelector('#interior-prev')?.addEventListener('click', () => {
+      sound.playStep()
+      this.showInteriorStep(this.interiorIndex - 1)
+    })
+    document.querySelector('#interior-next')?.addEventListener('click', () => {
+      sound.playStep()
+      this.showInteriorStep(this.interiorIndex + 1)
+    })
+    document.querySelector('#interior-exit')?.addEventListener('click', () => {
+      sound.playClick()
+      this.exitInterior()
     })
 
     // Panel tabs
@@ -609,17 +642,20 @@ export class CampusApp {
     const panel = document.querySelector('#panel')
     const icons = document.querySelector('#icons')
     const restoreBtn = document.querySelector('#btn-zen-restore')
+    const interior = document.querySelector('#interior-bar')
 
     if (this.zenMode) {
       topbar?.classList.add('is-hidden')
       parcours?.classList.add('is-hidden')
       panel?.classList.add('is-hidden')
+      interior?.classList.add('is-hidden')
       if (icons) (icons as HTMLElement).style.opacity = '0'
       if (restoreBtn) (restoreBtn as HTMLElement).hidden = false
     } else {
       topbar?.classList.remove('is-hidden')
       parcours?.classList.remove('is-hidden')
       panel?.classList.remove('is-hidden')
+      interior?.classList.remove('is-hidden')
       if (icons) (icons as HTMLElement).style.opacity = '1'
       if (restoreBtn) (restoreBtn as HTMLElement).hidden = true
     }
@@ -703,7 +739,13 @@ export class CampusApp {
         item.title.toLowerCase().includes(q) ||
         item.kicker.toLowerCase().includes(q) ||
         item.summary.toLowerCase().includes(q) ||
-        item.points.some((p) => p.toLowerCase().includes(q))
+        item.points.some((p) => p.toLowerCase().includes(q)) ||
+        (item.places ?? []).some(
+          (place) =>
+            place.title.toLowerCase().includes(q) ||
+            place.summary.toLowerCase().includes(q) ||
+            place.points.some((point) => point.toLowerCase().includes(q)),
+        )
       )
     })
 
@@ -760,7 +802,13 @@ export class CampusApp {
     const dialog = document.querySelector<HTMLDialogElement>('#search-dialog')
     dialog?.close()
     sound.playWhoosh()
-    this.focus(activity)
+    const query = document.querySelector<HTMLInputElement>('#search-input')?.value.trim().toLowerCase() ?? ''
+    const place = query
+      ? activity.places?.find(
+          (item) => item.title.toLowerCase().includes(query) || item.summary.toLowerCase().includes(query),
+        )
+      : undefined
+    this.focus(activity, place?.id ?? null)
   }
 
   private initKeyboardShortcuts() {
@@ -819,13 +867,15 @@ export class CampusApp {
         case 'ArrowDown':
           e.preventDefault()
           sound.playStep()
-          this.shift(1)
+          if (this.interiorMode) this.showInteriorStep(this.interiorIndex + 1)
+          else this.shift(1)
           break
         case 'ArrowLeft':
         case 'ArrowUp':
           e.preventDefault()
           sound.playStep()
-          this.shift(-1)
+          if (this.interiorMode) this.showInteriorStep(this.interiorIndex - 1)
+          else this.shift(-1)
           break
         case '?': {
           const helpDialog = document.querySelector<HTMLDialogElement>('#help-dialog')
@@ -893,7 +943,8 @@ export class CampusApp {
     if (label) label.textContent = `${items[this.step]?.title ?? brand.name} (${this.step + 1} / ${items.length})`
   }
 
-  private focus(activity: Activity) {
+  private focus(activity: Activity, placeId: string | null = null) {
+    if (this.interiorMode) this.exitInterior(false)
     if (this.activeBrand !== activity.brand) {
       this.activeBrand = activity.brand
       document.querySelectorAll<HTMLButtonElement>('.brand-btn').forEach((btn) => {
@@ -906,11 +957,14 @@ export class CampusApp {
     const items = activitiesOf(activity.brand)
     this.step = Math.max(0, items.findIndex((item) => item.id === activity.id))
     this.currentActivity = activity
-    this.tourTimer = 0 // reset step timer
+    this.currentPlaceId = placeId
+    this.tourTimer = 0
 
     this.renderSteps()
     this.openPanel(activity)
-    this.fly(blenderToThree(...activity.cam), blenderToThree(...activity.target))
+    const place = placeById(activity, placeId)
+    this.flyShot(this.shotFor(activity, place))
+    this.flows.setActiveFlow(place?.flowKind ?? activity.flowKind ?? null)
     this.syncMarkers()
   }
 
@@ -952,11 +1006,16 @@ export class CampusApp {
     const kicker = document.querySelector('#panel-kicker')
     if (kicker) kicker.textContent = `${brand.name} · ${activity.kicker}`
     const title = document.querySelector('#panel-title')
-    if (title) title.textContent = activity.title
+    if (title) title.textContent = placeById(activity, this.currentPlaceId)?.title ?? activity.title
     const summary = document.querySelector('#panel-summary')
-    if (summary) summary.textContent = activity.summary
+    const place = placeById(activity, this.currentPlaceId)
+    if (summary) summary.textContent = place?.summary ?? activity.summary
     const list = document.querySelector('#panel-points')
-    if (list) list.innerHTML = activity.points.map((point) => `<li>${point}</li>`).join('')
+    const points = place?.points ?? activity.points
+    if (list) list.innerHTML = points.map((point) => `<li>${point}</li>`).join('')
+    this.renderPlaces(activity)
+    this.renderBenefits(place?.benefits ?? activity.benefits)
+    this.renderFlowLegend(place?.flowKind ?? activity.flowKind)
 
     const stats = document.querySelector('#panel-stats') as HTMLElement | null
     if (stats) {
@@ -981,6 +1040,9 @@ export class CampusApp {
         noc.innerHTML = ''
       }
     }
+
+    const enter = document.querySelector<HTMLButtonElement>('#panel-enter-interior')
+    if (enter) enter.hidden = !activity.enterInterior
 
     // Default to Overview tab
     document.querySelectorAll('.panel-tab').forEach((t) => t.classList.remove('is-active'))
@@ -1051,8 +1113,11 @@ export class CampusApp {
   }
 
   private overview() {
+    if (this.interiorMode) this.exitInterior(false)
     this.activeBrand = null
     this.currentActivity = null
+    this.currentPlaceId = null
+    this.flows.setActiveFlow(null)
     this.closePanel()
     const path = document.querySelector('#parcours') as HTMLElement | null
     if (path) path.hidden = true
@@ -1061,32 +1126,35 @@ export class CampusApp {
     this.syncMarkers()
   }
 
-  private fly(pos: THREE.Vector3, target: THREE.Vector3) {
-    const from = this.camera.position.clone()
-    const fromTarget = this.controls.target.clone()
-    const start = performance.now()
-    const duration = 1400
-    this.flying = true
+  private fly(pos: THREE.Vector3, target: THREE.Vector3, fov = 46, minDistance = 5, maxDistance = 240) {
+    this.flyShot({ position: pos, target, fov, minDistance, maxDistance })
+  }
 
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration)
-      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      this.camera.position.lerpVectors(from, pos, e)
-      this.controls.target.lerpVectors(fromTarget, target, e)
-      this.controls.update()
-      if (t < 1) {
-        requestAnimationFrame(tick)
-      } else {
-        this.flying = false
-        this.atmosphere.updateFocusedShadows(
-          this.controls.target,
-          this.camera.position.distanceTo(this.controls.target),
-          true,
-        )
-        this.queueShadowBake()
-      }
+  private flyShot(shot: CameraShot) {
+    this.controls.enabled = false
+    this.flying = true
+    this.director.flyTo(shot, 1.45, () => {
+      this.flying = false
+      this.controls.enabled = true
+      this.atmosphere.updateFocusedShadows(
+        this.controls.target,
+        this.camera.position.distanceTo(this.controls.target),
+        true,
+      )
+      this.queueShadowBake()
+    })
+  }
+
+  private shotFor(activity: Activity, place?: ActivityPlace): CameraShot {
+    const cam = place?.cam ?? activity.cam
+    const target = place?.target ?? activity.target
+    return {
+      position: blenderToThree(...cam),
+      target: blenderToThree(...target),
+      fov: place?.fov ?? activity.fov ?? 42,
+      minDistance: place?.minDistance ?? activity.minDistance ?? 5,
+      maxDistance: place?.maxDistance ?? activity.maxDistance ?? 240,
     }
-    requestAnimationFrame(tick)
   }
 
   private syncMarkers() {
@@ -1108,6 +1176,9 @@ export class CampusApp {
   private frame() {
     this.clock.update()
     const dt = this.clock.getDelta()
+    this.elapsed += dt
+    this.director.update(dt)
+    this.flying = this.director.busy
     if (!this.flying) {
       this.controls.target.clamp(this.campusTargetBounds.min, this.campusTargetBounds.max)
       this.camera.position.y = Math.max(1.8, this.camera.position.y)
@@ -1129,6 +1200,7 @@ export class CampusApp {
     if (this.ready) {
       this.traffic.update(dt)
       this.technicians.update(dt)
+      this.flows.update(dt, this.elapsed)
     }
 
     // Tour timer update
@@ -1218,5 +1290,168 @@ export class CampusApp {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     this.postProcessing.setSize(window.innerWidth, window.innerHeight)
+  }
+
+  private renderPlaces(activity: Activity) {
+    const host = document.querySelector<HTMLElement>('#panel-places')
+    if (!host) return
+    const places = activity.places ?? []
+    host.hidden = places.length === 0
+    host.innerHTML = places
+      .map(
+        (place) =>
+          `<button type="button" class="place-chip ${place.id === this.currentPlaceId ? 'is-active' : ''}" data-place="${place.id}">${place.title}</button>`,
+      )
+      .join('')
+    host.querySelectorAll<HTMLButtonElement>('.place-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        sound.playStep()
+        const next = chip.dataset.place === this.currentPlaceId ? null : chip.dataset.place ?? null
+        this.focus(activity, next)
+      })
+    })
+  }
+
+  private renderBenefits(benefits?: string[]) {
+    const host = document.querySelector<HTMLElement>('#panel-benefits')
+    if (!host) return
+    if (!benefits?.length) {
+      host.hidden = true
+      host.innerHTML = ''
+      return
+    }
+    host.hidden = false
+    host.innerHTML = `<div class="panel-section-title">Ce que cela change</div><ul class="panel-points-list">${benefits
+      .map((item) => `<li>${item}</li>`)
+      .join('')}</ul>`
+  }
+
+  private renderFlowLegend(kind?: 'fiber' | 'power') {
+    const host = document.querySelector<HTMLElement>('#panel-flow')
+    if (!host) return
+    if (!kind) {
+      host.hidden = true
+      return
+    }
+    host.hidden = false
+    host.dataset.kind = kind
+    host.innerHTML =
+      kind === 'fiber'
+        ? '<i></i><span>Signal optique — le pulse suit la fibre déjà tracée sur le campus.</span>'
+        : '<i></i><span>Énergie — le pulse suit les liaisons électriques déjà présentes.</span>'
+  }
+
+  private enterInterior() {
+    const activity = this.currentActivity
+    const root = this.scene.getObjectByName('datacenter')
+    if (!activity?.enterInterior || !root) return
+    const present = DC_INTERIOR_STEPS.filter((step) => !step.match || this.objectsMatching(root, step.match).length > 0)
+    const detailed = present.filter((step) => step.match)
+    if (!detailed.length) {
+      const summary = document.querySelector('#panel-summary')
+      if (summary) {
+        summary.textContent =
+          'Le modèle chargé ne contient pas les équipements intérieurs nommés de cette salle. Aucun objet n’a été ajouté.'
+      }
+      return
+    }
+    if (this.isTouring) this.toggleTour()
+    if (this.interiorMode) this.exitInterior(false)
+    setInteriorVisibility(root, true)
+    this.interiorSteps = present.map((step) => ({
+      ...step,
+      objects: step.match ? this.objectsMatching(root, step.match) : [],
+    }))
+    this.interiorMode = true
+    const shells = [root, this.scene.getObjectByName('datacenter-exterior')].filter(
+      (item): item is THREE.Object3D => Boolean(item),
+    )
+    this.cutaway.apply(shells, this.interiorCutHeight(root), (mesh) => !isInteriorName(mesh.name))
+    this.atmosphere.enterInteriorMode('cutaway')
+    const preferred = this.currentPlaceId === 'continuity' ? 'ups' : this.currentPlaceId === 'racks' ? 'racks' : this.currentPlaceId
+    const index = Math.max(0, this.interiorSteps.findIndex((step) => step.id === preferred))
+    const bar = document.querySelector<HTMLElement>('#interior-bar')
+    if (bar) bar.hidden = false
+    this.showInteriorStep(index === -1 ? 0 : index)
+  }
+
+  private showInteriorStep(index: number) {
+    if (!this.interiorSteps.length) return
+    this.interiorIndex = (index + this.interiorSteps.length) % this.interiorSteps.length
+    const step = this.interiorSteps[this.interiorIndex]!
+    const title = document.querySelector('#interior-title')
+    const counter = document.querySelector('#interior-step')
+    if (title) title.textContent = step.title
+    if (counter) counter.textContent = `${this.interiorIndex + 1} / ${this.interiorSteps.length}`
+    const summary = document.querySelector('#panel-summary')
+    if (summary) summary.textContent = step.summary
+    const list = document.querySelector('#panel-points')
+    if (list) list.innerHTML = step.points.map((point) => `<li>${point}</li>`).join('')
+    const panelTitle = document.querySelector('#panel-title')
+    if (panelTitle) panelTitle.textContent = step.title
+    const targets = step.objects.length ? step.objects : [this.scene.getObjectByName('datacenter')].filter(Boolean) as THREE.Object3D[]
+    this.flyShot(this.shotForObjects(targets, step.id === 'overview'))
+  }
+
+  private exitInterior(restoreShot = true) {
+    if (!this.interiorMode) return
+    const root = this.scene.getObjectByName('datacenter')
+    this.cutaway.clear()
+    if (root) setInteriorVisibility(root, false)
+    this.atmosphere.exitInteriorMode()
+    this.interiorMode = false
+    this.interiorSteps = []
+    const bar = document.querySelector<HTMLElement>('#interior-bar')
+    if (bar) bar.hidden = true
+    if (restoreShot && this.currentActivity) {
+      this.openPanel(this.currentActivity)
+      this.flyShot(this.shotFor(this.currentActivity, placeById(this.currentActivity, this.currentPlaceId)))
+    }
+  }
+
+  private objectsMatching(root: THREE.Object3D, pattern: RegExp) {
+    const found: THREE.Object3D[] = []
+    root.traverse((obj) => {
+      if (obj !== root && pattern.test(obj.name)) found.push(obj)
+    })
+    return found
+  }
+
+  private interiorCutHeight(root: THREE.Object3D) {
+    const shell = new THREE.Box3().setFromObject(root)
+    let interiorTop = shell.min.y
+    let any = false
+    root.traverse((obj) => {
+      if (!isInteriorName(obj.name)) return
+      const box = new THREE.Box3().setFromObject(obj)
+      if (box.isEmpty()) return
+      interiorTop = Math.max(interiorTop, box.max.y)
+      any = true
+    })
+    if (!any) return shell.min.y + (shell.max.y - shell.min.y) * 0.72
+    return Math.min(shell.max.y - 0.2, interiorTop + 0.45)
+  }
+
+  private shotForObjects(objects: THREE.Object3D[], overhead: boolean): CameraShot {
+    const box = new THREE.Box3()
+    for (const obj of objects) box.expandByObject(obj)
+    if (box.isEmpty()) {
+      return this.currentActivity
+        ? this.shotFor(this.currentActivity)
+        : { position: this.camera.position.clone(), target: this.controls.target.clone(), fov: 42 }
+    }
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const radius = Math.max(6, size.length() * 0.55)
+    const position = overhead
+      ? center.clone().add(new THREE.Vector3(radius * 0.35, radius * 1.15, radius * 0.2))
+      : center.clone().add(new THREE.Vector3(radius * 0.85, radius * 0.72, radius * 0.55))
+    return {
+      position,
+      target: center,
+      fov: overhead ? 42 : 36,
+      minDistance: 3,
+      maxDistance: Math.max(80, radius * 4),
+    }
   }
 }
