@@ -2,18 +2,13 @@ import * as THREE from 'three'
 import { RENDER } from './RenderSettings'
 
 /**
- * Adaptive reflective glass: full HDRI response when the camera is settled /
- * close; lighter sampling while orbiting or looking from far.
- *
- * Materials stay MeshStandard reflective glass (same tint / metalness) —
- * only envMapIntensity + roughness ease. Looks like glass the whole time;
- * full sparkle returns as soon as motion stops.
+ * Reflective architectural glass. One response for every camera state so
+ * façades do not flicker when orbiting or flying.
  */
 export class GlassPerformance {
   private readonly registered = new Set<THREE.MeshStandardMaterial>()
   private readonly materials: THREE.MeshStandardMaterial[] = []
   private mode: 'full' | 'motion' | 'far' = 'full'
-  private settleAt = 0
 
   collect(root: THREE.Object3D) {
     root.traverse((obj) => {
@@ -75,22 +70,11 @@ export class GlassPerformance {
   }
 
   /**
-   * @param moving — user drag / fly / orbit in progress
-   * @param orbitDist — camera ↔ controls target distance (m)
-   * @param nowMs — performance.now()
+   * Glass stays on the settled response while orbiting and from the air.
+   * Switching roughness and IBL per camera state flickered every façade.
    */
-  update(moving: boolean, orbitDist: number, nowMs: number) {
-    if (moving) {
-      this.settleAt = nowMs + 320
-      this.apply('motion')
-      return
-    }
-    if (nowMs < this.settleAt) {
-      this.apply('motion')
-      return
-    }
-    // Far aerial: still reflective, slightly softer IBL (fill-rate win on towers).
-    this.apply(orbitDist > 120 ? 'far' : 'full')
+  update(_moving: boolean, _orbitDist: number, _nowMs: number) {
+    if (this.mode !== 'full') this.apply('full')
   }
 
   private apply(next: 'full' | 'motion' | 'far') {

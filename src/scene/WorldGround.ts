@@ -1,20 +1,20 @@
 import * as THREE from 'three'
 import { RENDER } from './RenderSettings'
-import { GRASS_COLOR } from './look'
+import { addEdgePlanting } from './Landscaping'
 
 /**
- * Aerial-visible countryside tile size. Campus lawns stay fine-scale in look.ts;
- * a 4.5 m tile from overview mips to a solid lime slab (Minecraft/table look).
+ * Countryside repeat. Small enough to read as grass from a drone, large
+ * enough that mipmaps turn it into tone instead of a tiled pattern.
  */
-const WORLD_TILE_M = 95
-/** Earth / soil tint for distant countryside (multiply with grass albedo). */
-const EARTH = new THREE.Color(0.42, 0.36, 0.24)
-/** Muted pasture — not neon lawn. */
-const COUNTRY_GRASS = GRASS_COLOR.clone().multiplyScalar(0.78).lerp(EARTH, 0.28)
+const WORLD_TILE_M = 7
+/** Warm soil. Linear values — 0.2 already reads as a light khaki on screen. */
+const EARTH = new THREE.Color(0.16, 0.11, 0.05)
+/** Dry-season olive. Darker than the campus lawns, still clearly grass. */
+const COUNTRY_GRASS = new THREE.Color(0.16, 0.22, 0.055)
 /** How far the countryside disc sits under walking surfaces (meters). */
 const BELOW_ROAD_M = 0.65
 /** Soft bank width from campus rim into rolling hills (meters). */
-const RIM_BLEND_M = 110
+const RIM_BLEND_M = 180
 
 function hash(x: number, y: number) {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453
@@ -42,6 +42,23 @@ function fbm(x: number, z: number) {
     noise2(x * 0.08, z * 0.08) * 0.14 +
     noise2(x * 0.2, z * 0.2) * 0.08
   )
+}
+
+/** Local Y of the countryside disc, relative to the campus center on XZ. */
+export function pastureHeight(dx: number, dz: number, worldX: number, worldZ: number, campusR: number) {
+  const d = Math.hypot(dx, dz)
+  const under = 1 - THREE.MathUtils.smoothstep(d, campusR - 36, campusR + 24)
+  const depression = -BELOW_ROAD_M * 1.4 * under
+  const bermT = THREE.MathUtils.smoothstep(d, campusR - 8, campusR + 90)
+  const berm = Math.sin(Math.min(1, bermT) * Math.PI) * 1.15 * (1 - under)
+  const land = THREE.MathUtils.smoothstep(d, campusR + 6, campusR + 36)
+  const farOut = THREE.MathUtils.smoothstep(d, campusR + 40, campusR + 200)
+  const hills = (fbm(worldX, worldZ) - 0.5) * 28 * Math.max(land, farOut * 0.65)
+  const ridges = (fbm(worldX * 0.45 + 20, worldZ * 0.45) - 0.5) * 10 * farOut
+  const micro = (fbm(worldX * 2.2, worldZ * 2.2) - 0.5) * 2.2 * land
+  const folds = (noise2(worldX * 0.048, worldZ * 0.048) - 0.5) * 7.5 * land
+  const rolls = (noise2(worldX * 0.035, worldZ * 0.035) - 0.5) * 7 * land * (1 - under)
+  return depression + berm + hills + ridges + micro + folds + rolls
 }
 
 function percentile(values: number[], p: number) {
@@ -99,7 +116,7 @@ async function groundMaterial(anisotropy: number) {
   // Low IBL — sky env on a huge flat disc reads as a blue plastic plate.
   const mat = new THREE.MeshStandardMaterial({
     name: 'world-ground',
-    color: COUNTRY_GRASS,
+    color: 0xffffff,
     roughness: 0.94,
     metalness: 0,
     vertexColors: true,
@@ -113,7 +130,7 @@ async function groundMaterial(anisotropy: number) {
   if (map) mat.map = wrapMap(map, anisotropy, true)
     if (normalMap) {
     mat.normalMap = wrapMap(normalMap, anisotropy, false)
-    mat.normalScale.set(1.8, 1.8)
+    mat.normalScale.set(2.1, 2.1)
   }
   if (roughnessMap) mat.roughnessMap = wrapMap(roughnessMap, anisotropy, false)
   return mat
@@ -142,17 +159,22 @@ export async function addWorldGround(
 
   // Full disc: continuous land, no see-through hole / blue plate.
   const geo = new THREE.CircleGeometry(radius, 192, 0, Math.PI * 2)
-  // Extra radial rings so hills aren't a few giant facets.
-  const radial = 72
+  // Pack rings on the collar you see from a drone so the slopes
+  // are not a handful of visible triangles.
+  const radial = 104
   const disc = new THREE.BufferGeometry()
   {
-    // Rebuild as a segmented disc (CircleGeometry is fan-only — bad for hills).
     const positions: number[] = []
     const uvs: number[] = []
     const indices: number[] = []
-    const thetaSeg = 192
+    const thetaSeg = 288
+    const focus = campusR + 220
+    const focusRings = 78
     for (let r = 0; r <= radial; r++) {
-      const rr = (r / radial) * radius
+      const rr =
+        r <= focusRings
+          ? (r / focusRings) * focus
+          : focus + ((r - focusRings) / (radial - focusRings)) * (radius - focus)
       for (let t = 0; t <= thetaSeg; t++) {
         const a = (t / thetaSeg) * Math.PI * 2
         const x = Math.cos(a) * rr
@@ -181,7 +203,6 @@ export async function addWorldGround(
   const pos = disc.attributes.position
   const colors = new Float32Array(pos.count * 3)
   const tmp = new THREE.Color()
-  const grassMul = new THREE.Color(1, 1, 1)
 
   for (let i = 0; i < pos.count; i++) {
     const lx = pos.getX(i)
@@ -190,32 +211,31 @@ export async function addWorldGround(
     const z = lz + center.z
     const d = Math.hypot(lx, lz)
 
-    // Under campus: sit well below roads (no blue void, no green flooding yards).
-    const under = 1 - THREE.MathUtils.smoothstep(campusR - 18, campusR + 6, d)
-    const depression = -BELOW_ROAD_M * 1.4 * under
+    pos.setY(i, pastureHeight(lx, lz, x, z, campusR))
 
-    // Soft berm just outside the footprint.
-    const bermT = THREE.MathUtils.smoothstep(campusR - 4, campusR + 55, d)
-    const berm = Math.sin(Math.min(1, bermT) * Math.PI) * 2.4 * (1 - under)
-
-    // Rolling hills start immediately outside the rim — must read from aerial overview.
-    const outside = THREE.MathUtils.smoothstep(campusR + 4, campusR + RIM_BLEND_M, d)
-    const hills = (fbm(x, z) - 0.35) * 72 * outside
-    const ridges = (fbm(x * 0.45 + 20, z * 0.45) - 0.5) * 28 * outside
-    const micro = (fbm(x * 2.2, z * 2.2) - 0.5) * 3.2 * Math.min(1, outside + bermT * 0.4)
-
-    pos.setY(i, depression + berm + hills + ridges + micro)
-
-    // Vertex tint: pasture → earth toward horizon (melts circular silhouette into fog).
-    const edge = THREE.MathUtils.smoothstep(radius * 0.38, radius * 0.98, d)
-    const soil = THREE.MathUtils.clamp(outside * 0.35 + edge * 0.92 + under * 0.15, 0, 1)
-    tmp.copy(grassMul).lerp(EARTH, soil)
-    const n = fbm(x * 0.55, z * 0.55)
-    tmp.r *= 0.9 + n * 0.12
-    tmp.g *= 0.92 + n * 0.1
-    tmp.b *= 0.86 + n * 0.08
-    // Horizon wash toward fog so the disc edge disappears.
-    tmp.lerp(new THREE.Color(0.86, 0.88, 0.9), edge * 0.55)
+    // Near the campus the disc used to stay one saturated green. Break it
+    // into olive pasture, dry khaki and darker clumps before the horizon wash.
+    const edge = THREE.MathUtils.smoothstep(d, radius * 0.45, radius * 0.96)
+    const under = 1 - THREE.MathUtils.smoothstep(d, campusR - 18, campusR + 6)
+    const outside = THREE.MathUtils.smoothstep(d, campusR + 4, campusR + RIM_BLEND_M)
+    const soil = THREE.MathUtils.clamp(outside * 0.22 + edge * 0.55 + under * 0.08, 0, 1)
+    const patch = fbm(x * 0.07, z * 0.07)
+    const dry = fbm(x * 0.018 + 8, z * 0.018)
+    const clump = fbm(x * 0.16 + 3, z * 0.16)
+    const field = noise2(x * 0.0035, z * 0.0035)
+    tmp.copy(COUNTRY_GRASS)
+    tmp.lerp(new THREE.Color(0.28, 0.19, 0.07), THREE.MathUtils.clamp(dry, 0, 1) * 0.55)
+    tmp.lerp(new THREE.Color(0.05, 0.1, 0.025), THREE.MathUtils.clamp(clump, 0, 1) * 0.5)
+    tmp.lerp(new THREE.Color(0.22, 0.16, 0.06), field * 0.4)
+    tmp.lerp(new THREE.Color(0.07, 0.14, 0.03), (1 - field) * 0.28)
+    tmp.r *= 0.9 + patch * 0.18
+    tmp.g *= 0.88 + patch * 0.2
+    tmp.b *= 0.82 + patch * 0.1
+    tmp.lerp(EARTH, soil * 0.65)
+    tmp.lerp(new THREE.Color(0.22, 0.24, 0.18), edge * 0.16)
+    const crest = pos.getY(i)
+    tmp.lerp(new THREE.Color(0.05, 0.08, 0.025), THREE.MathUtils.clamp(-crest / 8, 0, 1) * 0.45)
+    tmp.lerp(new THREE.Color(0.26, 0.2, 0.08), THREE.MathUtils.clamp(crest / 12, 0, 1) * 0.4)
     colors[i * 3] = tmp.r
     colors[i * 3 + 1] = tmp.g
     colors[i * 3 + 2] = tmp.b
@@ -239,7 +259,7 @@ export async function addWorldGround(
   const skirtColors = new Float32Array(skirt.attributes.position.count * 3)
   for (let i = 0; i < skirt.attributes.position.count; i++) {
     const y = skirt.attributes.position.getY(i)
-    const t = THREE.MathUtils.smoothstep(skirtH * 0.35, -skirtH * 0.45, y)
+    const t = 1 - THREE.MathUtils.smoothstep(y, -skirtH * 0.45, skirtH * 0.35)
     tmp.copy(EARTH).lerp(new THREE.Color(0.18, 0.15, 0.1), t)
     skirtColors[i * 3] = tmp.r
     skirtColors[i * 3 + 1] = tmp.g
@@ -264,6 +284,7 @@ export async function addWorldGround(
   mesh.add(skirtMesh)
 
   scene.add(mesh)
+  addEdgePlanting(mesh, campusR, center.x, center.z, pastureHeight)
   console.info(
     '[ground] countryside disc r',
     radius.toFixed(0),

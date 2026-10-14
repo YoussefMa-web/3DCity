@@ -10,14 +10,17 @@ import { sound } from '../ui/audio'
 import { Atmosphere } from './Atmosphere'
 import { CameraDirector, type CameraShot } from './CameraDirector'
 import { Cutaway } from './Cutaway'
+import { FacadeLod } from './FacadeLod'
 import { GlassPerformance } from './GlassPerformance'
-import { applyCampusAsphalt, applyCampusGrass, finishMesh, hideInteriors, isInteriorName, setInteriorVisibility } from './look'
+import { applyCampusAsphalt, applyCampusGrass, finishMesh, fitGeneratorCanopies, hideInteriors, isInteriorName, seatStreetLamps, setInteriorVisibility } from './look'
 import { NetworkFlows } from './NetworkFlows'
+import { NocInterior } from './NocInterior'
 import { addWorldGround } from './WorldGround'
+import { addSourcePowerLines } from './PowerLines'
 import { PostProcessing } from './PostProcessing'
 import { RENDER, QUALITY } from './RenderSettings'
 import { TrafficSystem } from './TrafficSystem'
-import { TechnicianSystem, type TechnicianData } from './TechnicianSystem'
+import { TechnicianSystem, TECHNICIANS, type TechnicianData } from './TechnicianSystem'
 import { type HdriId } from './HdriCatalog'
 
 interface Manifest {
@@ -26,6 +29,30 @@ interface Manifest {
 
 function blenderToThree(x: number, y: number, z: number) {
   return new THREE.Vector3(x, z, -y)
+}
+
+function threeToBlender(v: THREE.Vector3): [number, number, number] {
+  const round = (n: number) => Math.round(n * 10) / 10
+  return [round(v.x), round(-v.z), round(v.y)]
+}
+
+const CAMERA_SHOTS_KEY = 'campus.cameraShots'
+
+interface SavedCameraShot {
+  cam: [number, number, number]
+  target: [number, number, number]
+  fov: number
+}
+
+function loadCameraShots(): Map<string, SavedCameraShot> {
+  try {
+    const raw = localStorage.getItem(CAMERA_SHOTS_KEY)
+    if (!raw) return new Map()
+    const parsed = JSON.parse(raw) as Record<string, SavedCameraShot>
+    return new Map(Object.entries(parsed))
+  } catch {
+    return new Map()
+  }
 }
 
 /** Files known to exist under /models/web/ (avoids per-file HEAD round-trips). */
@@ -67,6 +94,7 @@ export class CampusApp {
   private readonly clock = new THREE.Timer()
   private readonly atmosphere: Atmosphere
   private readonly glassPerf = new GlassPerformance()
+  private readonly facadeLod = new FacadeLod()
   private readonly postProcessing: PostProcessing
   private readonly director: CameraDirector
   private readonly cutaway: Cutaway
@@ -81,7 +109,6 @@ export class CampusApp {
   private nocSiteIndex: number | null = null
   private step = 0
   private flying = false
-  private orbiting = false
   private ready = false
   private zenMode = false
   private isTouring = false
@@ -89,10 +116,18 @@ export class CampusApp {
   private readonly TOUR_STEP_DURATION = 8000 // 8 seconds per POI during auto-tour
   private elapsed = 0
   private interiorMode = false
+  private interiorKind: 'dc' | 'noc' | null = null
   private interiorIndex = 0
   private interiorSteps: Array<InteriorStepDef & { objects: THREE.Object3D[] }> = []
+  private interiorHidden: THREE.Object3D[] = []
+  private interiorRoomShot: CameraShot | null = null
+  private interiorOrbit: { minPolar: number; maxPolar: number; minDistance: number; maxDistance: number } | null = null
+  private nocRoom3d: NocInterior | null = null
+  private nocHidden: THREE.Object3D[] = []
   
   private shadowBakeFrames = 0
+  private readonly cameraShots = loadCameraShots()
+  private bootDismissed = false
   private searchFilter: 'all' | BrandId = 'all'
   private searchSelectedIndex = 0
   private filteredActivities: Activity[] = []
@@ -106,7 +141,8 @@ export class CampusApp {
     this.clock.connect(document)
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      // The composer target carries MSAA. The canvas flag does not apply to it.
+      antialias: false,
       powerPreference: 'high-performance',
       stencil: false,
       alpha: false,
@@ -118,8 +154,8 @@ export class CampusApp {
     this.renderer.toneMappingExposure = RENDER.exposure
     this.renderer.setClearColor(0xb8c8d4, 1)
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = THREE.PCFShadowMap
-    this.renderer.shadowMap.autoUpdate = false
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer.shadowMap.autoUpdate = true
     this.renderer.shadowMap.needsUpdate = true
     this.shadowBakeFrames = RENDER.shadow.settleBakeFrames
     this.atmosphere = new Atmosphere(this.scene, this.renderer)
@@ -133,33 +169,21 @@ export class CampusApp {
     this.controls = new OrbitControls(this.camera, canvas)
     this.controls.target.copy(look)
     this.controls.enableDamping = true
-    this.controls.dampingFactor = 0.08
-    this.controls.maxPolarAngle = Math.PI * 0.44 // Ne sors pas sous le sol
+    this.controls.dampingFactor = 0.14
+    this.controls.maxPolarAngle = Math.PI * 0.44 // Laisse passer les plans d'activité. Les collines coupent l'horizon.
     this.controls.minPolarAngle = 0.08
     this.controls.minDistance = 5 // Zoom proche
-    this.controls.maxDistance = 240 // Bloqué sur le campus, impossible de s'éloigner dans le vide
-    this.controls.zoomSpeed = 0.9
-    this.controls.rotateSpeed = 0.85
-    this.controls.panSpeed = 0.75
+    this.controls.maxDistance = 172 // Le plan large reste sur le campus, pas dans la nappe verte
+    this.controls.zoomSpeed = 1.15
+    this.controls.rotateSpeed = 1.05
+    this.controls.panSpeed = 0.95
     this.controls.update()
     this.director = new CameraDirector(this.camera, this.controls)
     this.cutaway = new Cutaway(this.renderer)
     this.scene.add(this.flows.group)
-    this.controls.addEventListener('start', () => {
-      this.orbiting = true
-    })
     this.controls.addEventListener('change', () => {
       this.controls.target.clamp(this.campusTargetBounds.min, this.campusTargetBounds.max)
       this.camera.position.y = Math.max(1.8, this.camera.position.y)
-    })
-    this.controls.addEventListener('end', () => {
-      this.orbiting = false
-      this.atmosphere.updateFocusedShadows(
-        this.controls.target,
-        this.camera.position.distanceTo(this.controls.target),
-        true,
-      )
-      this.queueShadowBake()
     })
 
     this.postProcessing = new PostProcessing(this.renderer, this.scene, this.camera)
@@ -198,8 +222,8 @@ export class CampusApp {
         let partial = 0
         for (const p of inflight.values()) partial += p
         const ratio = ((done + partial) / total) * MODEL_SPAN
-        const current = [...inflight.keys()].slice(-2).join(' · ') || 'modèles 3D'
-        set(ratio, `Chargement de ${current}…`)
+        const current = [...inflight.keys()].slice(-2).join(' · ') || '3D models'
+        set(ratio, `Loading ${current}…`)
       }
 
       const loadGltf = (url: string, id: string) =>
@@ -242,14 +266,18 @@ export class CampusApp {
         }
       })
       await Promise.all(workers)
-      set(0.91, 'Finalisation ciel HDRI & éclairage studio…')
+      seatStreetLamps(this.scene)
+      fitGeneratorCanopies(this.scene)
+      set(0.91, 'Finishing the HDRI sky and studio lighting…')
       await skyReady
       hideInteriors(this.scene)
-      set(0.94, 'Génération du gazon & textures paysagères…')
+      set(0.93, 'Stabilising distant façades…')
+      this.facadeLod.prepare(this.scene, this.camera, this.renderer)
+      set(0.94, 'Generating turf and landscape textures…')
       await applyCampusGrass(this.scene, anisotropy)
-      set(0.97, 'Construction voirie & marquages au sol…')
+      set(0.97, 'Building roads and ground markings…')
       await applyCampusAsphalt(this.scene, anisotropy)
-      set(0.98, 'Intégration du campus dans la topographie…')
+      set(0.98, 'Settling the campus into the terrain…')
       const world = new THREE.Box3()
       let hasBounds = false
       for (const child of this.scene.children) {
@@ -283,21 +311,26 @@ export class CampusApp {
       const radius = clamped.getSize(new THREE.Vector3()).length() * 0.35
       await addWorldGround(this.scene, clamped, anisotropy)
       this.atmosphere.setCampusFog(center, radius)
-      this.atmosphere.updateFocusedShadows(this.controls.target, this.camera.position.distanceTo(this.controls.target), true)
-      this.technicians.init(this.scene)
+      this.atmosphere.updateFocusedShadows(
+        this.controls.target,
+        this.camera.position.distanceTo(this.controls.target),
+        0,
+        true,
+      )
+      await this.technicians.init(this.scene)
+      addSourcePowerLines(this.scene)
       await this.flows.load()
       if (!world.isEmpty()) this.flows.pruneOutside(world)
       this.queueShadowBake()
-      this.postProcessing.setMoving(false)
       this.ready = true
       ;(window as unknown as { __CAMPUS_READY__?: boolean }).__CAMPUS_READY__ = true
-      const heroHint = QUALITY === 'hero' ? ' · Qualité Maximale' : ''
-      set(1, `Campus Prêt${heroHint}`)
+      const heroHint = QUALITY === 'hero' ? ' · Maximum quality' : ''
+      set(1, `Campus ready${heroHint}`)
       sound.playChime()
     } catch (err) {
       console.error(err)
       const msg = document.querySelector('#boot-message')
-      if (msg) msg.textContent = 'Erreur lors du chargement des modèles 3D'
+      if (msg) msg.textContent = 'Error while loading the 3D models'
     }
   }
 
@@ -306,29 +339,23 @@ export class CampusApp {
     const bar = document.querySelector('#boot-bar') as HTMLElement | null
     const label = document.querySelector('#boot-label')
     if (bar) bar.style.width = `${pct}%`
-    if (label) label.textContent = `CHARGEMENT DU CAMPUS — ${pct}%`
+    if (label) label.textContent = `LOADING THE CAMPUS — ${pct}%`
 
     const messages = [
-      'Assemblage des infrastructures interactives…',
-      'Connexion des réseaux télécom & énergie…',
-      'Éclairage des installations critiques & BESS…',
-      'Intégration centrale solaire & voirie…',
-      'Calibration du ciel, brouillard & reflets…',
-      'Optimisation des ombres et occlusion ambiante…',
+      'Assembling the interactive infrastructure…',
+      'Connecting telecom and power networks…',
+      'Lighting critical plant and the BESS…',
+      'Placing the solar plant and roads…',
+      'Calibrating sky, haze and reflections…',
+      'Tuning shadows and ambient occlusion…',
     ]
     const msgIdx = Math.min(messages.length - 1, Math.floor(ratio * messages.length))
     const bootMsgEl = document.querySelector('#boot-message')
     if (bootMsgEl) bootMsgEl.textContent = detail ?? messages[msgIdx]
 
-    if (pct >= 100) {
-      const enterBtn = document.querySelector('#boot-enter-btn') as HTMLButtonElement | null
-      if (enterBtn) {
-        enterBtn.hidden = false
-        enterBtn.onclick = () => {
-          sound.playClick()
-          this.hideBoot()
-        }
-      }
+    if (pct >= 100 && !this.bootDismissed) {
+      this.bootDismissed = true
+      this.hideBoot()
     }
   }
 
@@ -352,7 +379,7 @@ export class CampusApp {
         btn.dataset.brand = brand.id
         btn.style.setProperty('--brand', brand.color)
         btn.innerHTML = `
-          <span class="brand-mark">${iconSvg(brand.id === 'solar' ? 'sun' : brand.id === 'telecom' ? 'tower' : 'datacenter')}</span>
+          <span class="brand-mark">${iconSvg(brand.icon)}</span>
           <span class="brand-info">
             <strong>${brand.name}</strong>
             <small>${brand.tagline}</small>
@@ -424,6 +451,22 @@ export class CampusApp {
         sound.playWhoosh()
         this.focus(this.currentActivity)
       }
+    })
+    document.querySelector('#panel-btn-camera')?.addEventListener('click', () => {
+      sound.playClick()
+      this.openCameraAdjust()
+    })
+    document.querySelector('#camera-adjust-save')?.addEventListener('click', () => {
+      sound.playClick()
+      this.saveCameraShot()
+    })
+    document.querySelector('#camera-adjust-reset')?.addEventListener('click', () => {
+      sound.playClick()
+      this.resetCameraShot()
+    })
+    document.querySelector('#camera-adjust-close')?.addEventListener('click', () => {
+      sound.playClick()
+      this.closeCameraAdjust()
     })
     document.querySelector('#panel-enter-interior')?.addEventListener('click', () => {
       sound.playWhoosh()
@@ -569,6 +612,23 @@ export class CampusApp {
       if (techsDropdown) techsDropdown.hidden = !isHidden
     })
 
+    if (techsDropdown) {
+      techsDropdown.style.width = '420px'
+      techsDropdown.querySelectorAll('.dropdown-item').forEach((item) => item.remove())
+      const header = techsDropdown.querySelector('.dropdown-header')
+      if (header) header.textContent = 'Role and task'
+      const countLabel = techsMenuBtn?.querySelector('.hud-btn-text')
+      if (countLabel) countLabel.textContent = `Technicians (${TECHNICIANS.length})`
+      for (const tech of TECHNICIANS) {
+        const item = document.createElement('button')
+        item.type = 'button'
+        item.className = 'dropdown-item tech-menu-item'
+        item.dataset.tech = tech.id
+        item.innerHTML = `<span>${tech.role}</span><small>${tech.task}</small>`
+        techsDropdown.append(item)
+      }
+    }
+
     document.querySelectorAll<HTMLButtonElement>('#dropdown-techs .dropdown-item').forEach((item) => {
       item.addEventListener('click', () => {
         sound.playWhoosh()
@@ -672,14 +732,14 @@ export class CampusApp {
       case 'top':
         this.fly(blenderToThree(-50, 200, 320), blenderToThree(-50, 200, 0))
         break
-      case 'solar':
-        this.openBrand('solar')
+      case 'energies':
+        this.openBrand('energies')
         break
       case 'telecom':
         this.openBrand('telecom')
         break
-      case 'data':
-        this.openBrand('data')
+      case 'managed':
+        this.openBrand('managed')
         break
       case 'poste': {
         const act = ACTIVITIES.find((a) => a.id === 'solar-source')
@@ -700,16 +760,16 @@ export class CampusApp {
 
     if (this.isTouring) {
       tourBtn?.classList.add('is-touring')
-      if (tourLabel) tourLabel.textContent = 'Pause visite'
+      if (tourLabel) tourLabel.textContent = 'Pause tour'
       if (tourIcon) tourIcon.innerHTML = iconSvg('pause')
       parcoursTourBtn?.classList.add('is-active')
       if (timerBar) (timerBar as HTMLElement).hidden = false
       if (!this.activeBrand) {
-        this.openBrand('solar')
+        this.openBrand('telecom')
       }
     } else {
       tourBtn?.classList.remove('is-touring')
-      if (tourLabel) tourLabel.textContent = 'Visite guidée'
+      if (tourLabel) tourLabel.textContent = 'Guided tour'
       if (tourIcon) tourIcon.innerHTML = iconSvg('play')
       parcoursTourBtn?.classList.remove('is-active')
       if (timerBar) (timerBar as HTMLElement).hidden = true
@@ -754,7 +814,7 @@ export class CampusApp {
     }
 
     if (this.filteredActivities.length === 0) {
-      host.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--muted); font-size: 13px;">Aucune installation trouvée pour "${query}"</div>`
+      host.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--muted); font-size: 13px;">No installation found for "${query}"</div>`
       return
     }
 
@@ -827,15 +887,15 @@ export class CampusApp {
       switch (e.key) {
         case '1':
           sound.playClick()
-          this.openBrand('solar')
+          this.openBrand('telecom')
           break
         case '2':
           sound.playClick()
-          this.openBrand('telecom')
+          this.openBrand('energies')
           break
         case '3':
           sound.playClick()
-          this.openBrand('data')
+          this.openBrand('managed')
           break
         case '0':
           sound.playClick()
@@ -943,8 +1003,15 @@ export class CampusApp {
     if (label) label.textContent = `${items[this.step]?.title ?? brand.name} (${this.step + 1} / ${items.length})`
   }
 
+  private opensInterior(activity: Activity, placeId: string | null) {
+    if (activity.nocRoom) return placeId == null || placeId === 'wall' || placeId === 'dispatch'
+    if (activity.id === 'data-shell') return placeId == null || placeId === 'hall'
+    return false
+  }
+
   private focus(activity: Activity, placeId: string | null = null) {
-    if (this.interiorMode) this.exitInterior(false)
+    const direct = this.opensInterior(activity, placeId)
+    if (this.interiorMode && !direct) this.exitInterior(false)
     if (this.activeBrand !== activity.brand) {
       this.activeBrand = activity.brand
       document.querySelectorAll<HTMLButtonElement>('.brand-btn').forEach((btn) => {
@@ -963,14 +1030,16 @@ export class CampusApp {
     this.renderSteps()
     this.openPanel(activity)
     const place = placeById(activity, placeId)
-    this.flyShot(this.shotFor(activity, place))
+    if (direct) this.enterInterior({ keepTour: this.isTouring })
+    else this.flyShot(this.shotFor(activity, place))
     this.flows.setActiveFlow(place?.flowKind ?? activity.flowKind ?? null)
     this.syncMarkers()
+    this.syncCameraAdjust()
   }
 
   private shift(dir: number) {
     if (!this.activeBrand) {
-      this.openBrand('solar')
+      this.openBrand('telecom')
       return
     }
     const items = activitiesOf(this.activeBrand)
@@ -979,7 +1048,7 @@ export class CampusApp {
     if (nextIndex >= items.length) {
       // Loop to next brand or start of current
       if (this.isTouring) {
-        const brandOrder: BrandId[] = ['solar', 'telecom', 'data']
+        const brandOrder: BrandId[] = ['telecom', 'energies', 'managed']
         const currentBrandIdx = brandOrder.indexOf(this.activeBrand)
         const nextBrand = brandOrder[(currentBrandIdx + 1) % brandOrder.length]
         this.openBrand(nextBrand!)
@@ -1056,7 +1125,7 @@ export class CampusApp {
     if (!host) return
     const site = this.nocSiteIndex !== null ? NOC_MONITOR_SITES[this.nocSiteIndex] : null
     const chips = [
-      `<button type="button" class="noc-chip ${site ? '' : 'is-active'}" data-noc="overview">Mur 13 écrans</button>`,
+      `<button type="button" class="noc-chip ${site ? '' : 'is-active'}" data-noc="overview">13-screen wall</button>`,
       ...NOC_MONITOR_SITES.map(
         (item, index) =>
           `<button type="button" class="noc-chip ${this.nocSiteIndex === index ? 'is-active' : ''}" data-noc="${index}">${item.title.split('·')[0].trim()}</button>`,
@@ -1083,7 +1152,7 @@ export class CampusApp {
             )
             .join('')}
         </div>
-        <div class="panel-section-title">Inventaire & Télémétrie</div>
+        <div class="panel-section-title">Inventory and telemetry</div>
         <div style="display: flex; flex-direction: column; gap: 4px;">
           ${site.equipment
             .map(
@@ -1092,7 +1161,7 @@ export class CampusApp {
             )
             .join('')}
         </div>
-        <div class="panel-section-title" style="margin-top: 8px;">Procédures d’Intervention</div>
+        <div class="panel-section-title" style="margin-top: 8px;">Response procedures</div>
         <ul class="panel-points-list">${site.procedures.map((p) => `<li>${p}</li>`).join('')}</ul>
       `
     }
@@ -1110,6 +1179,7 @@ export class CampusApp {
   private closePanel() {
     const panel = document.querySelector('#panel') as HTMLElement | null
     if (panel) panel.hidden = true
+    this.closeCameraAdjust()
   }
 
   private overview() {
@@ -1126,35 +1196,100 @@ export class CampusApp {
     this.syncMarkers()
   }
 
-  private fly(pos: THREE.Vector3, target: THREE.Vector3, fov = 46, minDistance = 5, maxDistance = 240) {
+  private fly(pos: THREE.Vector3, target: THREE.Vector3, fov = 46, minDistance = 5, maxDistance = 172) {
     this.flyShot({ position: pos, target, fov, minDistance, maxDistance })
   }
 
   private flyShot(shot: CameraShot) {
     this.controls.enabled = false
     this.flying = true
-    this.director.flyTo(shot, 1.45, () => {
+    this.controls.maxDistance = shot.maxDistance ?? 172
+    this.director.flyTo(shot, 0.52, () => {
       this.flying = false
       this.controls.enabled = true
-      this.atmosphere.updateFocusedShadows(
-        this.controls.target,
-        this.camera.position.distanceTo(this.controls.target),
-        true,
-      )
-      this.queueShadowBake()
     })
   }
 
+  private shotKey(activity: Activity, place?: ActivityPlace | null) {
+    return place ? `${activity.id}:${place.id}` : activity.id
+  }
+
   private shotFor(activity: Activity, place?: ActivityPlace): CameraShot {
-    const cam = place?.cam ?? activity.cam
-    const target = place?.target ?? activity.target
+    const saved = this.cameraShots.get(this.shotKey(activity, place))
+    const cam = saved?.cam ?? place?.cam ?? activity.cam
+    const target = saved?.target ?? place?.target ?? activity.target
+    const position = blenderToThree(...cam)
+    const look = blenderToThree(...target)
+    const distance = position.distanceTo(look)
+    const authoredMax = Math.min(place?.maxDistance ?? activity.maxDistance ?? 172, 172)
     return {
-      position: blenderToThree(...cam),
-      target: blenderToThree(...target),
-      fov: place?.fov ?? activity.fov ?? 42,
-      minDistance: place?.minDistance ?? activity.minDistance ?? 5,
-      maxDistance: place?.maxDistance ?? activity.maxDistance ?? 240,
+      position,
+      target: look,
+      fov: saved?.fov ?? place?.fov ?? activity.fov ?? 42,
+      minDistance: Math.min(place?.minDistance ?? activity.minDistance ?? 5, Math.max(2, distance * 0.35)),
+      maxDistance: Math.max(authoredMax, distance + 12),
     }
+  }
+
+  private openCameraAdjust() {
+    if (!this.currentActivity) return
+    if (this.isTouring) this.toggleTour()
+    this.director.cancel()
+    this.flying = false
+    this.controls.enabled = true
+    this.controls.minDistance = 2
+    this.controls.maxDistance = 220
+    const bar = document.querySelector<HTMLElement>('#camera-adjust')
+    if (bar) bar.hidden = false
+    this.syncCameraAdjust()
+  }
+
+  private closeCameraAdjust() {
+    const bar = document.querySelector<HTMLElement>('#camera-adjust')
+    if (bar) bar.hidden = true
+  }
+
+  private saveCameraShot() {
+    const activity = this.currentActivity
+    if (!activity) return
+    const place = placeById(activity, this.currentPlaceId)
+    const shot: SavedCameraShot = {
+      cam: threeToBlender(this.camera.position),
+      target: threeToBlender(this.controls.target),
+      fov: Math.round(this.camera.fov),
+    }
+    this.cameraShots.set(this.shotKey(activity, place), shot)
+    this.persistCameraShots()
+    this.syncCameraAdjust('Vue enregistrée. Elle sera reprise à la prochaine ouverture de ce point.')
+  }
+
+  private resetCameraShot() {
+    const activity = this.currentActivity
+    if (!activity) return
+    const place = placeById(activity, this.currentPlaceId)
+    this.cameraShots.delete(this.shotKey(activity, place))
+    this.persistCameraShots()
+    this.flyShot(this.shotFor(activity, place))
+    this.syncCameraAdjust('Vue d’origine rétablie.')
+  }
+
+  private persistCameraShots() {
+    const data: Record<string, SavedCameraShot> = {}
+    for (const [key, shot] of this.cameraShots) data[key] = shot
+    localStorage.setItem(CAMERA_SHOTS_KEY, JSON.stringify(data))
+  }
+
+  private syncCameraAdjust(note?: string) {
+    const activity = this.currentActivity
+    const button = document.querySelector<HTMLButtonElement>('#panel-btn-camera')
+    const place = activity ? placeById(activity, this.currentPlaceId) : undefined
+    const saved = activity ? this.cameraShots.has(this.shotKey(activity, place)) : false
+    button?.classList.toggle('is-saved', saved)
+    const label = document.querySelector('#camera-adjust-label')
+    const bar = document.querySelector<HTMLElement>('#camera-adjust')
+    if (!label || bar?.hidden) return
+    const name = place?.title ?? activity?.title ?? 'ce point'
+    label.textContent = note ?? `Vue de « ${name} ». Tourne avec la souris, puis enregistre.`
   }
 
   private syncMarkers() {
@@ -1175,7 +1310,8 @@ export class CampusApp {
 
   private frame() {
     this.clock.update()
-    const dt = this.clock.getDelta()
+    // A stalled frame must not teleport the camera, fog, or traffic.
+    const dt = Math.min(this.clock.getDelta(), 1 / 30)
     this.elapsed += dt
     this.director.update(dt)
     this.flying = this.director.busy
@@ -1186,17 +1322,14 @@ export class CampusApp {
     }
     const dist = this.camera.position.distanceTo(this.controls.target)
     this.atmosphere.updateViewFog(dist, dt)
-
-    if (!this.orbiting && !this.flying && this.atmosphere.updateFocusedShadows(this.controls.target, dist)) {
-      this.queueShadowBake(3)
-    }
+    this.atmosphere.updateFocusedShadows(this.controls.target, dist, dt)
     if (this.shadowBakeFrames > 0) {
       this.renderer.shadowMap.needsUpdate = true
       this.shadowBakeFrames -= 1
     }
-    this.renderer.shadowMap.autoUpdate = !this.orbiting && !this.flying
-    this.postProcessing.setMoving(this.flying || this.orbiting)
-    this.glassPerf.update(this.flying || this.orbiting, dist, performance.now())
+    this.glassPerf.update(this.flying, dist, performance.now())
+    this.facadeLod.update(this.camera, this.renderer, dt)
+    this.nocRoom3d?.update(this.elapsed)
     if (this.ready) {
       this.traffic.update(dt)
       this.technicians.update(dt)
@@ -1262,27 +1395,28 @@ export class CampusApp {
   private showTechnicianCard(tech: TechnicianData) {
     const card = document.querySelector<HTMLElement>('#tech-card')
     const name = document.querySelector('#tech-card-name')
-    const role = document.querySelector('#tech-card-role')
-    const zone = document.querySelector('#tech-card-zone')
+    const role = document.querySelector<HTMLElement>('#tech-card-role')
+    const zone = document.querySelector<HTMLElement>('#tech-card-zone')
     const task = document.querySelector('#tech-card-task')
     if (!card) return
     card.hidden = false
-    if (name) name.textContent = tech.name
-    if (role) role.textContent = tech.role
-    if (zone) zone.textContent = tech.zone
+    if (name) name.textContent = tech.role
+    if (role) role.hidden = true
+    if (zone) zone.hidden = true
     if (task) task.textContent = tech.task
   }
 
   private focusTechnician(id: string) {
     const tech = this.technicians.getTechnicianById(id)
     if (!tech) return
-    const targetPos = blenderToThree(...tech.position)
+    const authored = blenderToThree(...tech.position)
+    const placed = this.technicians.getPlacement(id) ?? authored
     const camPos = tech.camPos
-      ? blenderToThree(...tech.camPos)
-      : targetPos.clone().add(new THREE.Vector3(5, 3.5, 5))
+      ? blenderToThree(...tech.camPos).add(placed.clone().sub(authored))
+      : placed.clone().add(new THREE.Vector3(5, 3.5, 5))
 
     this.showTechnicianCard(tech)
-    this.fly(camPos, targetPos)
+    this.fly(camPos, placed)
   }
 
   private resize() {
@@ -1321,7 +1455,7 @@ export class CampusApp {
       return
     }
     host.hidden = false
-    host.innerHTML = `<div class="panel-section-title">Ce que cela change</div><ul class="panel-points-list">${benefits
+    host.innerHTML = `<div class="panel-section-title">What this changes</div><ul class="panel-points-list">${benefits
       .map((item) => `<li>${item}</li>`)
       .join('')}</ul>`
   }
@@ -1337,12 +1471,16 @@ export class CampusApp {
     host.dataset.kind = kind
     host.innerHTML =
       kind === 'fiber'
-        ? '<i></i><span>Signal optique — le pulse suit la fibre déjà tracée sur le campus.</span>'
-        : '<i></i><span>Énergie — le pulse suit les liaisons électriques déjà présentes.</span>'
+        ? '<span class="flow-key"><i class="is-aerial"></i><span>Aerial fibre — pole to façade</span></span><span class="flow-key"><i class="is-buried"></i><span>Underground fibre — buried duct</span></span>'
+        : '<span class="flow-key"><i class="is-aerial"></i><span>Aerial power — overhead line</span></span><span class="flow-key"><i class="is-buried"></i><span>Underground power — buried cable</span></span>'
   }
 
-  private enterInterior() {
+  private enterInterior(options?: { keepTour?: boolean }) {
     const activity = this.currentActivity
+    if (activity?.nocRoom) {
+      this.enterNoc(options)
+      return
+    }
     const root = this.scene.getObjectByName('datacenter')
     if (!activity?.enterInterior || !root) return
     const present = DC_INTERIOR_STEPS.filter((step) => !step.match || this.objectsMatching(root, step.match).length > 0)
@@ -1351,11 +1489,11 @@ export class CampusApp {
       const summary = document.querySelector('#panel-summary')
       if (summary) {
         summary.textContent =
-          'Le modèle chargé ne contient pas les équipements intérieurs nommés de cette salle. Aucun objet n’a été ajouté.'
+          'The loaded model does not contain the named equipment for this room. Nothing was added.'
       }
       return
     }
-    if (this.isTouring) this.toggleTour()
+    if (this.isTouring && !options?.keepTour) this.toggleTour()
     if (this.interiorMode) this.exitInterior(false)
     setInteriorVisibility(root, true)
     this.interiorSteps = present.map((step) => ({
@@ -1363,19 +1501,160 @@ export class CampusApp {
       objects: step.match ? this.objectsMatching(root, step.match) : [],
     }))
     this.interiorMode = true
-    const shells = [root, this.scene.getObjectByName('datacenter-exterior')].filter(
-      (item): item is THREE.Object3D => Boolean(item),
-    )
-    this.cutaway.apply(shells, this.interiorCutHeight(root), (mesh) => !isInteriorName(mesh.name))
+    this.interiorKind = 'dc'
+    this.hideInteriorOccluders(root)
+    const framed = this.shellBounds(root)
+    this.cutaway.apply([root], this.interiorCutHeight(root), (mesh) => !isInteriorName(mesh.name) && !isInteriorName(mesh.parent?.name ?? ''))
     this.atmosphere.enterInteriorMode('cutaway')
-    const preferred = this.currentPlaceId === 'continuity' ? 'ups' : this.currentPlaceId === 'racks' ? 'racks' : this.currentPlaceId
+    this.interiorOrbit = {
+      minPolar: this.controls.minPolarAngle,
+      maxPolar: this.controls.maxPolarAngle,
+      minDistance: this.controls.minDistance,
+      maxDistance: this.controls.maxDistance,
+    }
+    this.controls.minPolarAngle = 0.02
+    this.controls.maxPolarAngle = Math.PI * 0.48
+    this.interiorRoomShot = this.roomShot(framed)
+    const preferred = this.currentPlaceId === 'continuity' ? 'ups' : this.currentPlaceId === 'racks' ? 'racks' : 'overview'
     const index = Math.max(0, this.interiorSteps.findIndex((step) => step.id === preferred))
     const bar = document.querySelector<HTMLElement>('#interior-bar')
     if (bar) bar.hidden = false
-    this.showInteriorStep(index === -1 ? 0 : index)
+    this.showInteriorStep(index === -1 ? 0 : index, true)
   }
 
-  private showInteriorStep(index: number) {
+  /** Ops floor from the previous campus: the site is hidden and only the 13-screen room remains. */
+  private enterNoc(options?: { keepTour?: boolean }) {
+    if (this.isTouring && !options?.keepTour) this.toggleTour()
+    if (this.interiorMode) this.exitInterior(false)
+    if (!this.nocRoom3d) {
+      this.nocRoom3d = new NocInterior()
+      this.scene.add(this.nocRoom3d.group)
+    }
+    this.nocHidden = []
+    for (const child of this.scene.children) {
+      if (child === this.nocRoom3d.group) continue
+      if ((child as THREE.Light).isLight) continue
+      if (!child.visible) continue
+      child.visible = false
+      this.nocHidden.push(child)
+    }
+    this.nocRoom3d.show()
+    this.nocRoom3d.setSelectedMonitor(null)
+    this.interiorKind = 'noc'
+    this.interiorMode = true
+    this.interiorSteps = [
+      {
+        id: 'overview',
+        title: NOC_OVERVIEW.title,
+        summary: NOC_OVERVIEW.description,
+        points: [...NOC_OVERVIEW.points],
+        objects: [],
+      },
+      ...NOC_MONITOR_SITES.map((site) => ({
+        id: site.id,
+        title: site.title,
+        summary: site.description,
+        points: site.metrics.slice(0, 4).map((metric) => `${metric.label} : ${metric.value} ${metric.unit ?? ''}`.trim()),
+        objects: [],
+      })),
+    ]
+    this.atmosphere.enterInteriorMode('room')
+    this.interiorOrbit = {
+      minPolar: this.controls.minPolarAngle,
+      maxPolar: this.controls.maxPolarAngle,
+      minDistance: this.controls.minDistance,
+      maxDistance: this.controls.maxDistance,
+    }
+    this.controls.minPolarAngle = 0.02
+    this.controls.maxPolarAngle = Math.PI * 0.5 - 0.04
+    const shot = this.nocRoom3d.computeCameraShot()
+    this.interiorRoomShot = {
+      position: shot.position,
+      target: shot.target,
+      fov: shot.fov,
+      minDistance: shot.minDistance,
+      maxDistance: shot.maxDistance,
+    }
+    const bar = document.querySelector<HTMLElement>('#interior-bar')
+    if (bar) bar.hidden = false
+    this.showInteriorStep(0, true)
+  }
+
+  /** Same opening as the previous campus: drop the outer shell, the roof plant and the panels sitting on it. */
+  private hideInteriorOccluders(root: THREE.Object3D) {
+    const exterior = this.scene.getObjectByName('datacenter-exterior')
+    if (exterior) this.hideInteriorObject(exterior)
+    const room = this.shellBounds(root)
+    if (room.isEmpty()) return
+    const pad = room.clone()
+    pad.min.x -= 2
+    pad.min.z -= 2
+    pad.max.x += 2
+    pad.max.z += 2
+    this.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh || !mesh.visible) return
+      if (isInteriorName(mesh.name) || isInteriorName(mesh.parent?.name ?? '')) return
+      if (/coque/i.test(mesh.name) || /coque/i.test(mesh.parent?.name ?? '')) return
+      const box = new THREE.Box3().setFromObject(mesh)
+      if (box.isEmpty()) return
+      const size = box.getSize(new THREE.Vector3())
+      if (size.x > 90 || size.z > 90) return
+      const overlaps =
+        box.min.x < pad.max.x && box.max.x > pad.min.x && box.min.z < pad.max.z && box.max.z > pad.min.z
+      const onRoof = box.min.y > room.min.y + 1.2
+      if (!overlaps || !onRoof) return
+      this.hideInteriorObject(mesh)
+    })
+    root.traverse((obj) => {
+      if (/rooftop|chiller|toiture|plafond/i.test(obj.name)) this.hideInteriorObject(obj)
+    })
+  }
+
+  private hideInteriorObject(obj: THREE.Object3D) {
+    if (!obj.visible || this.interiorHidden.includes(obj)) return
+    obj.visible = false
+    this.interiorHidden.push(obj)
+  }
+
+  private restoreInteriorOccluders() {
+    for (const obj of this.interiorHidden) obj.visible = true
+    this.interiorHidden = []
+  }
+
+  private shellBounds(root: THREE.Object3D) {
+    const box = new THREE.Box3()
+    root.traverse((obj) => {
+      if (/coque/i.test(obj.name)) box.expandByObject(obj)
+    })
+    if (box.isEmpty()) return this.interiorBounds()
+    return box
+  }
+
+  private interiorBounds() {
+    const box = new THREE.Box3()
+    for (const step of this.interiorSteps) {
+      for (const obj of step.objects) box.expandByObject(obj)
+    }
+    return box
+  }
+
+  /** Overhead 3/4 of the technical room, matching the old interior camera. */
+  private roomShot(box: THREE.Box3): CameraShot {
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const span = Math.max(size.x, size.z, 12)
+    const height = Math.max(18, span * 0.62)
+    return {
+      position: new THREE.Vector3(center.x, center.y + height, center.z + height * 0.75),
+      target: center,
+      fov: 42,
+      minDistance: 4,
+      maxDistance: Math.max(90, height * 2.5),
+    }
+  }
+
+  private showInteriorStep(index: number, forceFly = false) {
     if (!this.interiorSteps.length) return
     this.interiorIndex = (index + this.interiorSteps.length) % this.interiorSteps.length
     const step = this.interiorSteps[this.interiorIndex]!
@@ -1389,16 +1668,38 @@ export class CampusApp {
     if (list) list.innerHTML = step.points.map((point) => `<li>${point}</li>`).join('')
     const panelTitle = document.querySelector('#panel-title')
     if (panelTitle) panelTitle.textContent = step.title
-    const targets = step.objects.length ? step.objects : [this.scene.getObjectByName('datacenter')].filter(Boolean) as THREE.Object3D[]
-    this.flyShot(this.shotForObjects(targets, step.id === 'overview'))
+    if (this.interiorKind === 'noc') {
+      this.nocRoom3d?.setSelectedMonitor(step.id === 'overview' ? null : this.interiorIndex - 1)
+    }
+    const room = this.interiorRoomShot
+    if (!forceFly && step.id !== 'overview' && !step.objects.length) return
+    const shot =
+      step.id === 'overview' || !step.objects.length
+        ? room ?? this.shotForObjects(step.objects, true)
+        : this.shotForObjects(step.objects, true)
+    this.flyShot(shot)
   }
 
   private exitInterior(restoreShot = true) {
     if (!this.interiorMode) return
     const root = this.scene.getObjectByName('datacenter')
     this.cutaway.clear()
+    this.restoreInteriorOccluders()
+    for (const obj of this.nocHidden) obj.visible = true
+    this.nocHidden = []
+    this.nocRoom3d?.hide()
+    this.nocRoom3d?.setSelectedMonitor(null)
     if (root) setInteriorVisibility(root, false)
     this.atmosphere.exitInteriorMode()
+    if (this.interiorOrbit) {
+      this.controls.minPolarAngle = this.interiorOrbit.minPolar
+      this.controls.maxPolarAngle = this.interiorOrbit.maxPolar
+      this.controls.minDistance = this.interiorOrbit.minDistance
+      this.controls.maxDistance = this.interiorOrbit.maxDistance
+      this.interiorOrbit = null
+    }
+    this.interiorRoomShot = null
+    this.interiorKind = null
     this.interiorMode = false
     this.interiorSteps = []
     const bar = document.querySelector<HTMLElement>('#interior-bar')
@@ -1418,18 +1719,18 @@ export class CampusApp {
   }
 
   private interiorCutHeight(root: THREE.Object3D) {
-    const shell = new THREE.Box3().setFromObject(root)
-    let interiorTop = shell.min.y
-    let any = false
+    const shell = new THREE.Box3()
+    let found = false
     root.traverse((obj) => {
-      if (!isInteriorName(obj.name)) return
-      const box = new THREE.Box3().setFromObject(obj)
-      if (box.isEmpty()) return
-      interiorTop = Math.max(interiorTop, box.max.y)
-      any = true
+      if (!/coque/i.test(obj.name)) return
+      shell.expandByObject(obj)
+      found = true
     })
-    if (!any) return shell.min.y + (shell.max.y - shell.min.y) * 0.72
-    return Math.min(shell.max.y - 0.2, interiorTop + 0.45)
+    if (!found || shell.isEmpty()) shell.setFromObject(root)
+    const height = Math.max(1, shell.max.y - shell.min.y)
+    // The roof slab is the top of the shell. A cut a few centimetres under
+    // the peak leaves that slab in place, so the room still looks closed.
+    return shell.max.y - Math.max(1.6, height * 0.28)
   }
 
   private shotForObjects(objects: THREE.Object3D[], overhead: boolean): CameraShot {
@@ -1451,7 +1752,7 @@ export class CampusApp {
       target: center,
       fov: overhead ? 42 : 36,
       minDistance: 3,
-      maxDistance: Math.max(80, radius * 4),
+      maxDistance: Math.min(172, Math.max(80, radius * 4)),
     }
   }
 }

@@ -16,7 +16,7 @@ export type HdriPreset = {
 
 /**
  * On-disk HDRIs. Intensities compensate for map dynamic range so AgX/exposure
- * stay untouched. `clouds` is the production default (see Atmosphere).
+ * stay untouched. `puresky` is the production default: blue with a few clouds.
  */
 export const HDRI_PRESETS: readonly HdriPreset[] = [
   {
@@ -51,17 +51,17 @@ export const HDRI_PRESETS: readonly HdriPreset[] = [
     file: 'kloofendal_puresky_2k.hdr',
     url: `${import.meta.env.BASE_URL}hdri/kloofendal_puresky_2k.hdr`,
     label: 'Kloofendal partly-cloudy pure sky 2K',
-    env: 0.62,
-    bg: 0.88,
+    env: 0.7,
+    bg: 1.15,
     alignSun: true,
   },
 ]
 
 /**
- * `clouds` (Daylight dynamic cumulus clouds) provides a vivid, vibrant
- * blue sky with crisp, bright cloud formations for rich architectural depth.
+ * `puresky` is a bright blue sky with a few clouds — daylight with life,
+ * not the flat overcast sheet.
  */
-export const DEFAULT_HDRI_ID: HdriId = 'clouds'
+export const DEFAULT_HDRI_ID: HdriId = 'puresky'
 
 export function resolveHdriId(raw: string | null | undefined): HdriId {
   const id = (raw || '').toLowerCase()

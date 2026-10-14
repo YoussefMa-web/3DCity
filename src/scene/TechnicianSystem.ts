@@ -1,8 +1,10 @@
+﻿import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import * as THREE from 'three'
+import { isInteriorName } from './look'
 
 export interface TechnicianData {
   id: string
-  name: string
   role: string
   zone: string
   sector: 'solar' | 'telecom' | 'data' | 'poste'
@@ -18,187 +20,269 @@ export interface TechnicianData {
 }
 
 export const TECHNICIANS: TechnicianData[] = [
+  // Energies — beside the plant, on the ground. Rooftop PV has no one on the roof.
   {
     id: 'tech-solar-field',
-    name: 'Karim Bennani',
-    role: 'Technicien Supérieur Photovoltaïque',
-    zone: 'Centrale Photovoltaïque 1 MWc',
+    role: 'Senior photovoltaic technician',
+    zone: '1 MWc photovoltaic plant',
     sector: 'solar',
-    task: 'Inspection thermographique & mesure d’irradiance GHI',
-    position: [-123.5, 277.8, 2.2],
-    rotationY: Math.PI * 0.25,
+    task: 'Thermal inspection and GHI irradiance measurement',
+    position: [-108, 258, 0],
+    rotationY: Math.PI,
     helmetColor: '#f1c40f',
     vestColor: '#dfff00',
     prop: 'tablet',
-    camPos: [-120.5, 274.5, 4.2],
+    camPos: [-98, 246, 4.6],
   },
   {
     id: 'tech-solar-inverter',
-    name: 'Youssef El Amrani',
-    role: 'Électrotechnicien Haute Puissance',
-    zone: 'Rangée Onduleurs Delta SOLIVIA',
+    role: 'High-power electrical technician',
+    zone: 'Delta SOLIVIA inverter row',
     sector: 'solar',
-    task: 'Contrôle tension DC/AC, parafoudres & coffrets Quadro',
-    position: [-126.2, 276.1, 1.9],
-    rotationY: -Math.PI * 0.6,
+    task: 'DC/AC voltage check, surge arresters and Quadro cabinets',
+    position: [-142, 270, 0],
+    rotationY: Math.PI,
     helmetColor: '#ffffff',
     vestColor: '#ff5500',
     prop: 'multimeter',
-    camPos: [-123.5, 273.2, 3.8],
+    camPos: [-132, 258, 4.4],
   },
   {
     id: 'tech-solar-bess',
-    name: 'Mehdi Chraibi',
-    role: 'Spécialiste BESS & Stockage LiFePO4',
-    zone: 'Conteneur BESS Lithium 48V',
+    role: 'BESS and LiFePO4 storage specialist',
+    zone: '48 V lithium BESS container',
     sector: 'solar',
-    task: 'Diagnostic BMS, température cellules & climatisation de précision',
-    position: [-156.4, 246.2, 2.5],
-    rotationY: Math.PI * 0.8,
+    task: 'BMS diagnostics, cell temperature and precision cooling',
+    position: [-139, 247, 0],
+    rotationY: -Math.PI / 2,
     helmetColor: '#f1c40f',
     vestColor: '#dfff00',
     prop: 'tablet',
-    camPos: [-153.2, 243.0, 4.5],
+    camPos: [-132, 240, 4.5],
   },
   {
     id: 'tech-solar-tech',
-    name: 'Tariq Mansouri',
-    role: 'Chef d’Exploitation TGBT & SCADA',
-    zone: 'Local Technique Solaire',
+    role: 'LV switchboard and SCADA lead',
+    zone: 'Solar technical room',
     sector: 'solar',
-    task: 'Contrôle distribution basse tension, RTU & comptage HTA',
-    position: [-141.0, 241.5, 2.6],
-    rotationY: Math.PI * 0.4,
+    task: 'Low-voltage distribution, RTU and MV metering check',
+    position: [-130, 236, 0],
+    rotationY: Math.PI,
     helmetColor: '#ffffff',
     vestColor: '#ff5500',
     prop: 'clipboard',
-    camPos: [-138.0, 238.5, 4.6],
+    camPos: [-124, 228, 4.6],
   },
   {
-    id: 'tech-tel-tower',
-    name: 'Bilal Haddad',
-    role: 'Ingénieur Télécom & Radiofréquences',
-    zone: 'Pylône Treillis 41m',
-    sector: 'telecom',
-    task: 'Audit des faisceaux hertziens, balisage OACI & lignes coaxiales',
-    position: [-86.5, 122.8, 2.6],
-    rotationY: -Math.PI * 0.45,
-    helmetColor: '#3498db',
+    id: 'tech-solar-delivery',
+    role: 'MV delivery substation technician',
+    zone: '1,000 kVA delivery substation',
+    sector: 'solar',
+    task: 'Transformer check, MV cubicles and decoupling relay',
+    position: [-192, 226, 0],
+    rotationY: -Math.PI / 2,
+    helmetColor: '#e67e22',
+    vestColor: '#ff5500',
+    prop: 'multimeter',
+    camPos: [-184, 220, 4.4],
+  },
+  {
+    id: 'tech-solar-genset',
+    role: 'Critical power engineer',
+    zone: 'Generator yard',
+    sector: 'solar',
+    task: 'ATS transfer test and generator yard check',
+    position: [-210, 188, 0],
+    rotationY: Math.PI / 2,
+    helmetColor: '#ffffff',
     vestColor: '#ff5500',
     prop: 'clipboard',
-    camPos: [-83.0, 119.5, 4.8],
+    camPos: [-204, 180, 4.8],
   },
   {
-    id: 'tech-tel-cabinet',
-    name: 'Hamza Tahiri',
-    role: 'Technicien Énergie Télécom Outdoor',
-    zone: 'Shelters & Armoires Énergie 48V',
-    sector: 'telecom',
-    task: 'Maintenance préventive redresseurs & test banc batteries VRLA',
-    position: [-71.2, 126.5, 2.8],
-    rotationY: Math.PI * 0.95,
+    id: 'tech-solar-carport',
+    role: 'Solar canopy and EV technician',
+    zone: 'Parking canopies',
+    sector: 'solar',
+    task: 'Canopy modules, structure bolts and charger pedestals',
+    position: [-68, 219, 0],
+    rotationY: 0.35,
     helmetColor: '#f1c40f',
     vestColor: '#dfff00',
     prop: 'tools',
-    camPos: [-68.0, 123.5, 4.5],
+    camPos: [-62, 212, 4.2],
+  },
+  {
+    id: 'tech-poste-source',
+    role: '60/22 kV substation lead',
+    zone: 'HV/MV source substation',
+    sector: 'poste',
+    task: 'SF6 breaker watch, 1000 kVA transformer and SCADA',
+    position: [95, 165, 0],
+    rotationY: Math.PI,
+    helmetColor: '#ffffff',
+    vestColor: '#ff5500',
+    prop: 'tablet',
+    camPos: [102, 157, 5.2],
+  },
+  {
+    id: 'tech-patrol-solar',
+    role: 'Patrol and maintenance agent',
+    zone: 'Solar service road',
+    sector: 'solar',
+    task: 'Walking inspection of the fence and inverters',
+    position: [-188, 174, 0],
+    rotationY: 0,
+    helmetColor: '#f1c40f',
+    vestColor: '#dfff00',
+    prop: 'clipboard',
+    camPos: [-188, 166, 4],
+    isPatrolling: true,
+    patrolPoints: [
+      [-188, 174, 0],
+      [-120, 174, 0],
+      [-62, 174, 0],
+      [-120, 174, 0],
+    ],
+  },
+  // Telecom — tower apron, cabinets, east sidewalk, SRO, outside the data hall.
+  {
+    id: 'tech-tel-tower',
+    role: 'Telecom and RF engineer',
+    zone: '41 m lattice tower',
+    sector: 'telecom',
+    task: 'Microwave link audit, ICAO lighting and coaxial lines',
+    position: [-90, 108, 0],
+    rotationY: Math.PI,
+    helmetColor: '#3498db',
+    vestColor: '#ff5500',
+    prop: 'clipboard',
+    camPos: [-84, 100, 4.8],
+  },
+  {
+    id: 'tech-tel-cabinet',
+    role: 'Outdoor telecom power technician',
+    zone: 'Shelters and 48 V power cabinets',
+    sector: 'telecom',
+    task: 'Preventive rectifier maintenance and VRLA battery bank test',
+    position: [-66, 127, 0],
+    rotationY: -Math.PI / 2,
+    helmetColor: '#f1c40f',
+    vestColor: '#dfff00',
+    prop: 'tools',
+    camPos: [-60, 120, 4.5],
+  },
+  {
+    id: 'tech-tel-aerial',
+    role: 'Aerial fibre technician',
+    zone: 'ADSS street span',
+    sector: 'telecom',
+    task: 'Pole clamps, slack loops and ADSS span check',
+    position: [58.8, 210, 0],
+    rotationY: -Math.PI / 2,
+    helmetColor: '#3498db',
+    vestColor: '#dfff00',
+    prop: 'tablet',
+    camPos: [66, 204, 4.2],
   },
   {
     id: 'tech-fiber-sro',
-    name: 'Salma Ouazzani',
-    role: 'Experte Fibre Optique & FTTx',
-    zone: 'Sous-Répartiteur Optique (SRO)',
+    role: 'Fibre and FTTx specialist',
+    zone: 'Optical street cabinet (SRO)',
     sector: 'telecom',
-    task: 'Réflectométrie OTDR & contrôle des soudures fusion 144 FO',
-    position: [54.2, 299.8, 1.8],
-    rotationY: -Math.PI * 0.1,
+    task: 'OTDR reflectometry and 144-fibre fusion splice check',
+    position: [59, 296, 0],
+    rotationY: -Math.PI / 2,
     helmetColor: '#ffffff',
     vestColor: '#dfff00',
     prop: 'tablet',
-    camPos: [56.8, 296.5, 3.8],
+    camPos: [66, 290, 4],
   },
   {
-    id: 'tech-data-power',
-    name: 'Rachid Belkacem',
-    role: 'Ingénieur Génie Électrique DCF',
-    zone: 'Énergie Critique & Groupes Électrogènes',
-    sector: 'data',
-    task: 'Test commutation automatique ATS & banc de décharge UPS 2N',
-    position: [-135.5, 199.2, 3.2],
-    rotationY: Math.PI * 0.35,
+    id: 'tech-tel-dc',
+    role: 'Data center envelope technician',
+    zone: 'Data center shell',
+    sector: 'telecom',
+    task: 'Wall penetrations, waterproofing and external plant',
+    position: [-134, 198, 0],
+    rotationY: -Math.PI / 2,
     helmetColor: '#ffffff',
     vestColor: '#ff5500',
     prop: 'clipboard',
-    camPos: [-132.0, 195.5, 5.0],
+    camPos: [-126, 190, 4.6],
+  },
+  {
+    id: 'tech-patrol-telecom',
+    role: 'Network and street supervisor',
+    zone: 'East fibre sidewalk',
+    sector: 'telecom',
+    task: 'Underground chamber and ADSS aerial cable check',
+    position: [61, 170, 0],
+    rotationY: 0,
+    helmetColor: '#f1c40f',
+    vestColor: '#dfff00',
+    prop: 'tablet',
+    camPos: [68, 164, 4],
+    isPatrolling: true,
+    patrolPoints: [
+      [61, 170, 0],
+      [61, 240, 0],
+      [61, 308, 0],
+      [61, 240, 0],
+    ],
+  },
+  // Managed services — outside the NOC, the fence and the data hall.
+  {
+    id: 'tech-data-noc',
+    role: 'NOC field coordinator',
+    zone: 'NOC building exterior',
+    sector: 'data',
+    task: 'Dispatch handoff, access log and facade plant check',
+    position: [-170, 99, 0],
+    rotationY: Math.PI,
+    helmetColor: '#3498db',
+    vestColor: '#dfff00',
+    prop: 'tablet',
+    camPos: [-164, 91, 5],
   },
   {
     id: 'tech-data-guard',
-    name: 'Othmane Senhaji',
-    role: 'Superviseur de Site & Sécurité',
-    zone: 'Poste de Contrôle & Périmètre CCTV',
+    role: 'Site and security supervisor',
+    zone: 'Control post and CCTV perimeter',
     sector: 'data',
-    task: 'Supervision biométrie, barrières d’accès & flux caméras IR',
-    position: [-92.2, 131.5, 3.8],
+    task: 'Biometrics, access barriers and IR camera feeds',
+    position: [-96, 128, 0],
     rotationY: -Math.PI * 0.7,
     helmetColor: '#3498db',
     vestColor: '#dfff00',
     prop: 'tablet',
-    camPos: [-89.0, 128.0, 5.4],
+    camPos: [-89, 120, 5.2],
   },
   {
-    id: 'tech-poste-source',
-    name: 'Adil Kabbaj',
-    role: 'Chef de Poste Haute Tension 60/22 kV',
-    zone: 'Poste Source Électrique HT/MT',
-    sector: 'poste',
-    task: 'Surveillance disjoncteurs SF6, transformateur 1000kVA & SCADA',
-    position: [333.2, 303.8, 14.2],
-    rotationY: 0,
+    id: 'tech-data-perimeter',
+    role: 'Perimeter patrol officer',
+    zone: 'East fence and camera masts',
+    sector: 'data',
+    task: 'Fence line, IR cameras and gate log',
+    position: [-54, 136, 0],
+    rotationY: -Math.PI / 2,
+    helmetColor: '#e67e22',
+    vestColor: '#ff5500',
+    prop: 'clipboard',
+    camPos: [-46, 128, 4.8],
+  },
+  {
+    id: 'tech-data-hall',
+    role: 'Data hall security officer',
+    zone: 'Data center access',
+    sector: 'data',
+    task: 'Biometric doors, anti-passback and external cameras',
+    position: [-160, 178, 0],
+    rotationY: Math.PI,
     helmetColor: '#ffffff',
     vestColor: '#ff5500',
     prop: 'tablet',
-    camPos: [336.5, 300.0, 16.5],
-  },
-  {
-    id: 'tech-patrol-solar',
-    name: 'Nabil Fassi',
-    role: 'Agent de Ronde & Maintenance',
-    zone: 'Allée Centrale Solaire',
-    sector: 'solar',
-    task: 'Ronde pédestre d’inspection visuelle clôture & onduleurs',
-    position: [-110.0, 260.0, 2.2],
-    rotationY: 0,
-    helmetColor: '#f1c40f',
-    vestColor: '#dfff00',
-    prop: 'clipboard',
-    camPos: [-106.5, 256.5, 4.6],
-    isPatrolling: true,
-    patrolPoints: [
-      [-110.0, 260.0, 2.2],
-      [-110.0, 280.0, 2.2],
-      [-140.0, 280.0, 2.2],
-      [-140.0, 260.0, 2.2],
-    ],
-  },
-  {
-    id: 'tech-patrol-telecom',
-    name: 'Amine Alaoui',
-    role: 'Superviseur Réseau & Voirie',
-    zone: 'Boulevard Fibre & Infrastructures',
-    sector: 'telecom',
-    task: 'Contrôle des chambres souterraines & câbles aériens ADSS',
-    position: [20.0, 212.0, 4.2],
-    rotationY: 0,
-    helmetColor: '#f1c40f',
-    vestColor: '#dfff00',
-    prop: 'tablet',
-    camPos: [23.5, 208.5, 5.8],
-    isPatrolling: true,
-    patrolPoints: [
-      [20.0, 212.0, 4.2],
-      [40.0, 250.0, 2.0],
-      [55.0, 295.0, 1.8],
-      [40.0, 250.0, 2.0],
-    ],
+    camPos: [-154, 170, 4.6],
   },
 ]
 
@@ -206,798 +290,135 @@ function blenderToThree(x: number, y: number, z: number) {
   return new THREE.Vector3(x, z, -y)
 }
 
+
+const MODEL_URL = '/models/technician/worker.glb?v=seal'
+const TARGET_HEIGHT = 1.78
+/** Fast patrol. The clip is sped up in the same ratio, so the feet do not skate. */
+const WALK_SPEED = 4.2
+const WALK_TIME_SCALE = 3
+/** Soles sit just above the ray hit so the boots are not inside the slab. */
+const SOLE_CLEARANCE = 0.035
 /**
- * Generates realistic high-resolution procedural canvas textures for work apparel,
- * safety vest fabric, reflective 3M stripes, NETIS badges, cargo trousers, and screens.
+ * Standing moment of the Mixamo idle, after the arms have dropped
+ * and before the right glove rises onto the cheek.
  */
-class TextureGenerator {
-  static makeVestTexture(vestColor: string, name: string): THREE.CanvasTexture {
-    const size = 1024
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
+const IDLE_HOLD = 1.45
 
-    // Base Fluorescent Fabric
-    ctx.fillStyle = vestColor
-    ctx.fillRect(0, 0, size, size)
-
-    // Subtle technical fabric weave / grid noise
-    ctx.fillStyle = 'rgba(0,0,0,0.06)'
-    for (let y = 0; y < size; y += 4) {
-      ctx.fillRect(0, y, size, 1)
-    }
-    for (let x = 0; x < size; x += 4) {
-      ctx.fillRect(x, 0, 1, size)
-    }
-
-    // Horizontal 3M Retro-Reflective Silver Stripes (Chest & Waist)
-    const stripeColor = '#eef4fc'
-    const stripeGlow = '#ffffff'
-    const drawStripe = (y: number, h: number) => {
-      ctx.fillStyle = stripeColor
-      ctx.fillRect(0, y, size, h)
-      ctx.fillStyle = stripeGlow
-      ctx.fillRect(0, y + h * 0.25, size, h * 0.5)
-      // Stitched edge lines
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-      ctx.setLineDash([6, 4])
-      ctx.lineWidth = 2
-      ctx.strokeRect(0, y, size, h)
-      ctx.setLineDash([])
-    }
-
-    drawStripe(size * 0.35, size * 0.08)
-    drawStripe(size * 0.65, size * 0.08)
-
-    // Vertical reflective braces over shoulders
-    ctx.fillStyle = stripeColor
-    ctx.fillRect(size * 0.18, 0, size * 0.1, size)
-    ctx.fillRect(size * 0.72, 0, size * 0.1, size)
-
-    // Central Heavy Duty Zipper (Front)
-    ctx.fillStyle = '#111822'
-    ctx.fillRect(size * 0.485, 0, size * 0.03, size)
-    ctx.strokeStyle = '#8899aa'
-    ctx.lineWidth = 2
-    for (let y = 0; y < size; y += 8) {
-      ctx.beginPath()
-      ctx.moveTo(size * 0.485, y)
-      ctx.lineTo(size * 0.515, y)
-      ctx.stroke()
-    }
-
-    // Chest ID Badge Card Holder (Transparent vinyl with NETIS ID)
-    const badgeX = size * 0.22
-    const badgeY = size * 0.46
-    const badgeW = size * 0.2
-    const badgeH = size * 0.14
-
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(badgeX, badgeY, badgeW, badgeH)
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-    ctx.lineWidth = 3
-    ctx.strokeRect(badgeX, badgeY, badgeW, badgeH)
-
-    // Badge Header
-    ctx.fillStyle = '#0a2540'
-    ctx.fillRect(badgeX, badgeY, badgeW, badgeH * 0.28)
-    ctx.fillStyle = '#3ec6ff'
-    ctx.font = 'bold 16px Outfit, sans-serif'
-    ctx.fillText('NETIS GROUP', badgeX + 8, badgeY + badgeH * 0.2)
-
-    // Badge Name
-    ctx.fillStyle = '#111822'
-    ctx.font = 'bold 15px Outfit, sans-serif'
-    ctx.fillText(name.split(' ')[0] || 'TECH', badgeX + 8, badgeY + badgeH * 0.55)
-    ctx.font = '12px Outfit, sans-serif'
-    ctx.fillStyle = '#667788'
-    ctx.fillText('SERVICES TECHNIQUES', badgeX + 8, badgeY + badgeH * 0.78)
-
-    // Back Branding Text: "NETIS — SERVICES TECHNIQUES"
-    ctx.fillStyle = '#061424'
-    ctx.font = '800 36px Syne, sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('NETIS', size * 0.5, size * 0.22)
-    ctx.font = '600 18px Outfit, sans-serif'
-    ctx.fillText('SERVICES TECHNIQUES', size * 0.5, size * 0.27)
-    ctx.textAlign = 'start'
-
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.needsUpdate = true
-    return tex
-  }
-
-  static makePantsTexture(): THREE.CanvasTexture {
-    const size = 512
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
-
-    // Deep Navy Work Pants Fabric
-    ctx.fillStyle = '#182434'
-    ctx.fillRect(0, 0, size, size)
-
-    // Diagonal twill weave
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)'
-    ctx.lineWidth = 1
-    for (let i = -size; i < size * 2; i += 4) {
-      ctx.beginPath()
-      ctx.moveTo(i, 0)
-      ctx.lineTo(i + size, size)
-      ctx.stroke()
-    }
-
-    // Heavy reinforced knee patches in dark charcoal
-    ctx.fillStyle = '#0e151e'
-    ctx.fillRect(size * 0.1, size * 0.38, size * 0.8, size * 0.24)
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)'
-    ctx.setLineDash([4, 4])
-    ctx.lineWidth = 2
-    ctx.strokeRect(size * 0.1, size * 0.38, size * 0.8, size * 0.24)
-    ctx.setLineDash([])
-
-    // Cargo pocket flap
-    ctx.fillStyle = '#121b27'
-    ctx.fillRect(size * 0.15, size * 0.18, size * 0.7, size * 0.12)
-    ctx.strokeStyle = '#223246'
-    ctx.strokeRect(size * 0.15, size * 0.18, size * 0.7, size * 0.12)
-
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.needsUpdate = true
-    return tex
-  }
-
-  static makeTabletScreenTexture(): THREE.CanvasTexture {
-    const size = 512
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
-
-    // Dark SCADA Dashboard Theme
-    ctx.fillStyle = '#081320'
-    ctx.fillRect(0, 0, size, size)
-
-    // Top Status Header
-    ctx.fillStyle = '#0d2238'
-    ctx.fillRect(0, 0, size, 56)
-    ctx.fillStyle = '#3ec6ff'
-    ctx.font = 'bold 20px Outfit, sans-serif'
-    ctx.fillText('NETIS LIVE SCADA 24/7', 18, 36)
-    ctx.fillStyle = '#2ecc71'
-    ctx.font = '16px "JetBrains Mono", monospace'
-    ctx.fillText('ONLINE ●', size - 110, 36)
-
-    // Telemetry Gauges & Waves
-    ctx.strokeStyle = 'rgba(62, 198, 255, 0.4)'
-    ctx.lineWidth = 2
-    ctx.strokeRect(18, 74, size - 36, 160)
-
-    // Sine wave line (Grid Frequency & Power)
-    ctx.strokeStyle = '#3ec6ff'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    for (let x = 20; x < size - 20; x++) {
-      const y = 154 + Math.sin((x - 20) * 0.04) * 35 + Math.sin((x - 20) * 0.12) * 12
-      if (x === 20) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
-
-    // Key Values
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 36px Outfit, sans-serif'
-    ctx.fillText('784.5 kW', 30, 120)
-    ctx.fillStyle = '#8aa0ae'
-    ctx.font = '18px Outfit, sans-serif'
-    ctx.fillText('PUISSANCE ACTIVE', 30, 145)
-
-    // KPI Cards bottom
-    const drawKpi = (x: number, y: number, w: number, h: number, label: string, val: string, color: string) => {
-      ctx.fillStyle = 'rgba(255,255,255,0.05)'
-      ctx.fillRect(x, y, w, h)
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)'
-      ctx.strokeRect(x, y, w, h)
-      ctx.fillStyle = '#8aa0ae'
-      ctx.font = '14px Outfit, sans-serif'
-      ctx.fillText(label, x + 12, y + 26)
-      ctx.fillStyle = color
-      ctx.font = 'bold 22px Outfit, sans-serif'
-      ctx.fillText(val, x + 12, y + 60)
-    }
-
-    drawKpi(18, 250, (size - 48) / 2, 80, 'TENSION RÉSEAU', '20.4 kV', '#ffffff')
-    drawKpi(26 + (size - 48) / 2, 250, (size - 48) / 2, 80, 'IRRADIANCE GHI', '1 042 W/m²', '#f5b942')
-
-    drawKpi(18, 345, (size - 48) / 2, 80, 'TEMP. BESS', '22.8 °C', '#2ecc71')
-    drawKpi(26 + (size - 48) / 2, 345, (size - 48) / 2, 80, 'SLA SITE', '99.98 %', '#3ec6ff')
-
-    // Bottom progress bar
-    ctx.fillStyle = '#2ecc71'
-    ctx.fillRect(18, 445, size - 36, 12)
-
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.needsUpdate = true
-    return tex
-  }
-
-  static makeMultimeterTexture(): THREE.CanvasTexture {
-    const size = 256
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
-
-    // Rugged Fluke Yellow body
-    ctx.fillStyle = '#f39c12'
-    ctx.fillRect(0, 0, size, size)
-
-    // Dark Rubber Holster edges
-    ctx.fillStyle = '#1c222a'
-    ctx.fillRect(0, 0, 16, size)
-    ctx.fillRect(size - 16, 0, 16, size)
-    ctx.fillRect(0, 0, size, 16)
-    ctx.fillRect(0, size - 16, size, 16)
-
-    // Backlit LCD Display
-    ctx.fillStyle = '#a8e6cf'
-    ctx.fillRect(32, 32, size - 64, 80)
-    ctx.strokeStyle = '#1c222a'
-    ctx.lineWidth = 3
-    ctx.strokeRect(32, 32, size - 64, 80)
-
-    // Digits
-    ctx.fillStyle = '#062615'
-    ctx.font = 'bold 36px "JetBrains Mono", monospace'
-    ctx.fillText('398.2', 46, 85)
-    ctx.font = 'bold 18px "JetBrains Mono", monospace'
-    ctx.fillText('V AC ~', size - 100, 85)
-
-    // Rotary Dial
-    ctx.fillStyle = '#1c222a'
-    ctx.beginPath()
-    ctx.arc(size / 2, 170, 36, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = '#ffffff'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.moveTo(size / 2, 170)
-    ctx.lineTo(size / 2, 140)
-    ctx.stroke()
-
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.needsUpdate = true
-    return tex
-  }
+type Agent = {
+  data: TechnicianData
+  root: THREE.Group
+  mixer: THREE.AnimationMixer
+  idle: THREE.AnimationAction
+  walk: THREE.AnimationAction
+  moving: boolean
+  route: THREE.Vector3[]
+  patrolIndex: number
+  patrolProgress: number
 }
 
+type Footprint = { minX: number; maxX: number; minZ: number; maxZ: number }
+
 /**
- * Procedural Realistic Human Technician with anatomical contours,
- * PBR fabric & safety gear shaders, realistic props, and organic kinematics.
+ * Textured worker from Blender, with the Mixamo idle and walk baked on the rig.
  */
 export class TechnicianSystem {
   readonly group = new THREE.Group()
-  private readonly technicians: Array<{
-    data: TechnicianData
-    root: THREE.Group
-    head: THREE.Group
-    neck: THREE.Group
-    torso: THREE.Group
-    leftArm: THREE.Group
-    leftForearm: THREE.Group
-    rightArm: THREE.Group
-    rightForearm: THREE.Group
-    leftLeg: THREE.Group
-    leftShin: THREE.Group
-    rightLeg: THREE.Group
-    rightShin: THREE.Group
-    idlePhase: number
-    lookPhase: number
-    patrolIndex: number
-    patrolProgress: number
-    groundY: number
-  }> = []
+  private readonly agents: Agent[] = []
+  private readonly raycaster = new THREE.Raycaster()
+  private readonly down = new THREE.Vector3(0, -1, 0)
+  private readonly up = new THREE.Vector3(0, 1, 0)
+  private readonly faceNormal = new THREE.Vector3()
+  private groundMeshes: THREE.Object3D[] | null = null
+  private coverMeshes: THREE.Object3D[] | null = null
+  private footprints: Footprint[] | null = null
 
-  private sharedMaterials: Record<string, THREE.Material> = {}
-  private pantsTexture: THREE.CanvasTexture | null = null
-  private tabletTexture: THREE.CanvasTexture | null = null
-  private multimeterTexture: THREE.CanvasTexture | null = null
-  private raycaster = new THREE.Raycaster()
-
-  init(scene: THREE.Scene) {
+  async init(scene: THREE.Scene) {
     this.group.name = 'campus-technicians'
-    this.pantsTexture = TextureGenerator.makePantsTexture()
-    this.tabletTexture = TextureGenerator.makeTabletScreenTexture()
-    this.multimeterTexture = TextureGenerator.makeMultimeterTexture()
-
-    this.initSharedMaterials()
-    this.spawnTechnicians(scene)
     scene.add(this.group)
-    console.info(`[campus] technician system initialized: ${this.technicians.length} field engineers active`)
-  }
 
-  private initSharedMaterials() {
-    // Realistic Human Skin Shader
-    this.sharedMaterials.skin = new THREE.MeshStandardMaterial({
-      color: 0xdfa07a,
-      roughness: 0.65,
-      metalness: 0.05,
-    })
-
-    // Work Trousers with Cargo Pockets & Twill Map
-    this.sharedMaterials.pants = new THREE.MeshStandardMaterial({
-      map: this.pantsTexture,
-      roughness: 0.85,
-      metalness: 0.05,
-    })
-
-    // Heavy Leather Work Boots
-    this.sharedMaterials.boots = new THREE.MeshStandardMaterial({
-      color: 0x1a1512,
-      roughness: 0.7,
-      metalness: 0.15,
-    })
-
-    // Heavy Duty Work Gloves
-    this.sharedMaterials.gloves = new THREE.MeshStandardMaterial({
-      color: 0x222e3c,
-      roughness: 0.8,
-      metalness: 0.1,
-    })
-
-    // Wrap-Around Tinted Safety Sunglasses
-    this.sharedMaterials.sunglasses = new THREE.MeshPhysicalMaterial({
-      color: 0x081018,
-      roughness: 0.1,
-      metalness: 0.3,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
-      envMapIntensity: 2.0,
-    })
-
-    // Rugged Device Casing
-    this.sharedMaterials.deviceCase = new THREE.MeshStandardMaterial({
-      color: 0x11161d,
-      roughness: 0.35,
-      metalness: 0.4,
-    })
-
-    // Silver Reflective Tape
-    this.sharedMaterials.reflective = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.2,
-      metalness: 0.7,
-      emissive: 0x99aabb,
-      emissiveIntensity: 0.25,
-    })
-  }
-
-  private snapToGround(x: number, z: number, defaultY: number, scene: THREE.Scene): number {
-    const origin = new THREE.Vector3(x, 80, z)
-    const down = new THREE.Vector3(0, -1, 0)
-    this.raycaster.set(origin, down)
-    this.raycaster.far = 140
-
-    const targets: THREE.Object3D[] = []
-    scene.traverse((obj) => {
-      const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh || !mesh.geometry || mesh.name === 'sky' || mesh.userData.decoy) return
-      if (mesh.name.includes('technician')) return
-      targets.push(mesh)
-    })
-
-    const hits = this.raycaster.intersectObjects(targets, false)
-    if (hits.length > 0) {
-      for (const hit of hits) {
-        if (hit.point.y < 50 && hit.point.y > -5) {
-          return hit.point.y
-        }
-      }
+    const gltf = await new GLTFLoader().loadAsync(MODEL_URL)
+    const source = gltf.scene
+    const idleClip = inPlace(pickClip(gltf.animations, /^idle$/i))
+    const walkClip = inPlace(pickClip(gltf.animations, /^walk$/i)) ?? idleClip
+    if (!idleClip || !walkClip || idleClip.tracks.length === 0) {
+      throw new Error('technician model is missing idle or walk')
     }
-    return defaultY
-  }
 
-  private spawnTechnicians(scene: THREE.Scene) {
+    prepareHead(source)
+    seatOnGround(source, idleClip, walkClip)
+    await applyHelmetLogo(source)
+    this.buildingFootprints(scene)
+    this.collectCover(scene)
+
     for (const data of TECHNICIANS) {
-      const tech = this.buildRealisticTechnician(data)
-      const worldPos = blenderToThree(...data.position)
+      const body = cloneSkinned(source) as THREE.Object3D
+      body.traverse((obj) => {
+        const mesh = obj as THREE.Mesh
+        if (!mesh.isMesh) return
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        mesh.frustumCulled = false
+        mesh.userData.technicianMesh = true
+        const mat = mesh.material
+        const list = Array.isArray(mat) ? mat : [mat]
+        for (const entry of list) {
+          const std = entry as THREE.MeshStandardMaterial
+          if (!std || !('roughness' in std)) continue
+          std.roughness = Math.max(std.roughness, 0.62)
+          std.metalness = Math.min(std.metalness, 0.08)
+          std.envMapIntensity = Math.min(std.envMapIntensity || 1, 0.7)
+          if (/head/i.test(std.name)) sealHeadMaterial(std)
+        }
+      })
 
-      const groundY = this.snapToGround(worldPos.x, worldPos.z, worldPos.y, scene)
-      worldPos.y = groundY
-      tech.root.position.copy(worldPos)
-      tech.root.rotation.y = data.rotationY
+      const root = new THREE.Group()
+      root.name = `technician:${data.id}`
+      root.userData.technician = data
+      root.add(body)
 
-      this.group.add(tech.root)
-      this.technicians.push({
+      const route = (data.patrolPoints ?? [data.position]).map((point) => this.placeOnGround(point, scene))
+      root.position.copy(route[0]!)
+      root.rotation.y = data.rotationY
+
+      const mixer = new THREE.AnimationMixer(body)
+      const idle = mixer.clipAction(idleClip)
+      const walk = mixer.clipAction(walkClip)
+      idle.setLoop(THREE.LoopRepeat, Infinity)
+      walk.setLoop(THREE.LoopRepeat, Infinity)
+      walk.timeScale = WALK_TIME_SCALE
+      holdIdle(idle)
+      mixer.update(0)
+
+      this.group.add(root)
+      this.agents.push({
         data,
-        ...tech,
-        groundY,
-        idlePhase: Math.random() * Math.PI * 2,
-        lookPhase: Math.random() * Math.PI * 2,
+        root,
+        mixer,
+        idle,
+        walk,
+        moving: false,
+        route,
         patrolIndex: 0,
         patrolProgress: 0,
       })
     }
-  }
 
-  /**
-   * Constructs an anatomically proportional, smoothly sculpted realistic 3D human character.
-   */
-  private buildRealisticTechnician(data: TechnicianData) {
-    const root = new THREE.Group()
-    root.name = `technician:${data.id}`
-    root.userData.technician = data
-
-    // Natural human height (≈ 1.80m)
-    const scale = 1.0
-    root.scale.set(scale, scale, scale)
-
-    // Vest material with customized high-res texture & ID badge
-    const vestTex = TextureGenerator.makeVestTexture(data.vestColor, data.name)
-    const vestMat = new THREE.MeshStandardMaterial({
-      map: vestTex,
-      roughness: 0.65,
-      metalness: 0.05,
-      bumpScale: 0.02,
-    })
-
-    // Glossy Industrial Safety Hard Hat Helmet
-    const helmetMat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(data.helmetColor),
-      roughness: 0.25,
-      metalness: 0.1,
-      clearcoat: 0.8,
-      clearcoatRoughness: 0.15,
-      envMapIntensity: 1.6,
-    })
-
-    // Pelvis / Hips (y ≈ 0.98m)
-    const pelvis = new THREE.Group()
-    pelvis.position.y = 0.98
-    root.add(pelvis)
-
-    const pelvisMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.18, 16), this.sharedMaterials.pants)
-    pelvisMesh.castShadow = true
-    pelvis.add(pelvisMesh)
-
-    // Torso & Chest Group (Anatomical taper from waist to shoulders)
-    const torso = new THREE.Group()
-    torso.position.y = 0.09
-    pelvis.add(torso)
-
-    // Ergonomic Torso Lathe / Loft
-    const torsoPoints = [
-      new THREE.Vector2(0.14, 0.0),   // Waist
-      new THREE.Vector2(0.16, 0.15),  // Mid torso
-      new THREE.Vector2(0.20, 0.32),  // Chest
-      new THREE.Vector2(0.22, 0.42),  // Shoulders
-      new THREE.Vector2(0.10, 0.45),  // Clavicle / Neck base
-    ]
-    const torsoGeo = new THREE.LatheGeometry(torsoPoints, 20)
-    torsoGeo.scale(1.15, 1.0, 0.75) // Flatter chest/back profile
-    const torsoMesh = new THREE.Mesh(torsoGeo, vestMat)
-    torsoMesh.castShadow = true
-    torso.add(torsoMesh)
-
-    // Belt with buckle & radio holster
-    const belt = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.165, 0.165, 0.045, 20),
-      this.sharedMaterials.boots,
-    )
-    belt.scale.set(1.12, 1.0, 0.8)
-    belt.position.y = 0.02
-    torso.add(belt)
-
-    const buckle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.045, 0.035, 0.02),
-      this.sharedMaterials.reflective,
-    )
-    buckle.position.set(0, 0.02, 0.14)
-    torso.add(buckle)
-
-    // Shoulder Radio Transceiver with Antenna
-    const radio = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.09, 0.035), this.sharedMaterials.deviceCase)
-    radio.position.set(0.16, 0.36, 0.08)
-    radio.rotation.z = -0.15
-    torso.add(radio)
-
-    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.09), this.sharedMaterials.deviceCase)
-    antenna.position.set(0.17, 0.44, 0.08)
-    torso.add(antenna)
-
-    // Neck & Head
-    const neck = new THREE.Group()
-    neck.position.y = 0.45
-    torso.add(neck)
-
-    const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.09, 14), this.sharedMaterials.skin)
-    neckMesh.position.y = 0.04
-    neck.add(neckMesh)
-
-    const head = new THREE.Group()
-    head.position.y = 0.1
-    neck.add(head)
-
-    // Head Sculpt (Cranium + Jaw)
-    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 16), this.sharedMaterials.skin)
-    cranium.scale.set(0.9, 1.05, 1.0)
-    cranium.castShadow = true
-    head.add(cranium)
-
-    // Jaw / Chin
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.09), this.sharedMaterials.skin)
-    jaw.position.set(0, -0.04, 0.03)
-    head.add(jaw)
-
-    // Ears
-    const leftEar = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.035, 0.02), this.sharedMaterials.skin)
-    leftEar.position.set(-0.095, 0, 0)
-    head.add(leftEar)
-    const rightEar = leftEar.clone()
-    rightEar.position.x = 0.095
-    head.add(rightEar)
-
-    // MSA V-Gard Style Industrial Safety Hard Hat
-    const helmetDome = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.58),
-      helmetMat,
-    )
-    helmetDome.scale.set(0.95, 1.0, 1.1)
-    helmetDome.position.set(0, 0.03, -0.01)
-    helmetDome.castShadow = true
-    head.add(helmetDome)
-
-    // Top Reinforcing Ridge / Crest
-    const helmetCrest = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.22), helmetMat)
-    helmetCrest.position.set(0, 0.14, -0.01)
-    helmetCrest.rotation.x = -0.05
-    head.add(helmetCrest)
-
-    // Flared Front Peak & All-around Brim
-    const helmetBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.165, 0.165, 0.012, 22), helmetMat)
-    helmetBrim.scale.set(0.95, 1.0, 1.18)
-    helmetBrim.position.set(0, 0.025, 0.01)
-    helmetBrim.rotation.x = -0.08
-    head.add(helmetBrim)
-
-    // Wrap-Around Tinted Safety Glasses
-    const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.035, 0.06), this.sharedMaterials.sunglasses)
-    glasses.position.set(0, 0.01, 0.085)
-    head.add(glasses)
-
-    // Limbs - Arms (Left & Right)
-    const leftArm = new THREE.Group()
-    leftArm.position.set(-0.24, 0.38, 0)
-    torso.add(leftArm)
-
-    const rightArm = new THREE.Group()
-    rightArm.position.set(0.24, 0.38, 0)
-    torso.add(rightArm)
-
-    // Left Arm (Bicep & Forearm with elbow joint)
-    const leftBicep = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.045, 0.26, 14), vestMat)
-    leftBicep.position.y = -0.13
-    leftBicep.castShadow = true
-    leftArm.add(leftBicep)
-
-    const leftForearm = new THREE.Group()
-    leftForearm.position.y = -0.26
-    leftArm.add(leftForearm)
-
-    const leftForearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.038, 0.25, 14), this.sharedMaterials.pants)
-    leftForearmMesh.position.y = -0.125
-    leftForearmMesh.castShadow = true
-    leftForearm.add(leftForearmMesh)
-
-    const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.03), this.sharedMaterials.gloves)
-    leftHand.position.set(0, -0.27, 0)
-    leftForearm.add(leftHand)
-
-    // Right Arm
-    const rightBicep = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.045, 0.26, 14), vestMat)
-    rightBicep.position.y = -0.13
-    rightBicep.castShadow = true
-    rightArm.add(rightBicep)
-
-    const rightForearm = new THREE.Group()
-    rightForearm.position.y = -0.26
-    rightArm.add(rightForearm)
-
-    const rightForearmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.038, 0.25, 14), this.sharedMaterials.pants)
-    rightForearmMesh.position.y = -0.125
-    rightForearmMesh.castShadow = true
-    rightForearm.add(rightForearmMesh)
-
-    const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.03), this.sharedMaterials.gloves)
-    rightHand.position.set(0, -0.27, 0)
-    rightForearm.add(rightHand)
-
-    // Limbs - Legs (Left & Right)
-    const leftLeg = new THREE.Group()
-    leftLeg.position.set(-0.11, -0.05, 0)
-    pelvis.add(leftLeg)
-
-    const rightLeg = new THREE.Group()
-    rightLeg.position.set(0.11, -0.05, 0)
-    pelvis.add(rightLeg)
-
-    // Left Thigh
-    const leftThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.065, 0.42, 16), this.sharedMaterials.pants)
-    leftThigh.position.y = -0.21
-    leftThigh.castShadow = true
-    leftLeg.add(leftThigh)
-
-    const leftShin = new THREE.Group()
-    leftShin.position.y = -0.42
-    leftLeg.add(leftShin)
-
-    const leftShinMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.052, 0.4, 16), this.sharedMaterials.pants)
-    leftShinMesh.position.y = -0.2
-    leftShinMesh.castShadow = true
-    leftShin.add(leftShinMesh)
-
-    // Left Work Boot (Contoured ankle, steel toe cap, lug tread sole)
-    const leftBoot = new THREE.Group()
-    leftBoot.position.set(0, -0.42, 0.03)
-    leftShin.add(leftBoot)
-
-    const leftBootUpper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.21), this.sharedMaterials.boots)
-    leftBootUpper.position.set(0, 0.05, 0.03)
-    leftBootUpper.castShadow = true
-    leftBoot.add(leftBootUpper)
-
-    const leftBootSole = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.03, 0.23), this.sharedMaterials.deviceCase)
-    leftBootSole.position.set(0, 0.0, 0.03)
-    leftBootSole.castShadow = true
-    leftBoot.add(leftBootSole)
-
-    // Right Leg
-    const rightThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.065, 0.42, 16), this.sharedMaterials.pants)
-    rightThigh.position.y = -0.21
-    rightThigh.castShadow = true
-    rightLeg.add(rightThigh)
-
-    const rightShin = new THREE.Group()
-    rightShin.position.y = -0.42
-    rightLeg.add(rightShin)
-
-    const rightShinMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.052, 0.4, 16), this.sharedMaterials.pants)
-    rightShinMesh.position.y = -0.2
-    rightShinMesh.castShadow = true
-    rightShin.add(rightShinMesh)
-
-    const rightBoot = new THREE.Group()
-    rightBoot.position.set(0, -0.42, 0.03)
-    rightShin.add(rightBoot)
-
-    const rightBootUpper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.21), this.sharedMaterials.boots)
-    rightBootUpper.position.set(0, 0.05, 0.03)
-    rightBootUpper.castShadow = true
-    rightBoot.add(rightBootUpper)
-
-    const rightBootSole = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.03, 0.23), this.sharedMaterials.deviceCase)
-    rightBootSole.position.set(0, 0.0, 0.03)
-    rightBootSole.castShadow = true
-    rightBoot.add(rightBootSole)
-
-    // Working Props & Ergonomic Poses
-    if (data.prop === 'tablet') {
-      // Natural two-handed diagnostic tablet pose in front of chest
-      leftArm.rotation.set(0.65, 0.2, 0.25)
-      leftForearm.rotation.set(-1.15, -0.2, -0.35)
-
-      rightArm.rotation.set(0.65, -0.2, -0.25)
-      rightForearm.rotation.set(-1.15, 0.2, 0.35)
-
-      const tabletGroup = new THREE.Group()
-      tabletGroup.position.set(0.08, -0.26, 0.08)
-      tabletGroup.rotation.set(-0.35, 0.15, -0.1)
-      leftForearm.add(tabletGroup)
-
-      const tabletBody = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.016), this.sharedMaterials.deviceCase)
-      tabletGroup.add(tabletBody)
-
-      const tabletScreen = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.22, 0.16),
-        new THREE.MeshBasicMaterial({ map: this.tabletTexture }),
+    for (const agent of this.agents) {
+      const p = agent.root.position
+      const cover = this.coverAbove(p.x, p.z)
+      const inside = (this.footprints ?? []).some(
+        (box) => p.x > box.minX && p.x < box.maxX && p.z > box.minZ && p.z < box.maxZ,
       )
-      tabletScreen.position.z = 0.009
-      tabletGroup.add(tabletScreen)
-    } else if (data.prop === 'multimeter') {
-      // Left hand holding Fluke multimeter, right hand holding voltage test probe
-      leftArm.rotation.set(0.55, 0.1, 0.15)
-      leftForearm.rotation.set(-0.95, -0.1, -0.2)
-
-      rightArm.rotation.set(0.7, -0.25, -0.3)
-      rightForearm.rotation.set(-0.6, 0.15, 0.2)
-
-      const meterGroup = new THREE.Group()
-      meterGroup.position.set(0.04, -0.26, 0.06)
-      meterGroup.rotation.set(-0.4, 0, 0)
-      leftForearm.add(meterGroup)
-
-      const meterBody = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.19, 0.045),
-        new THREE.MeshStandardMaterial({ map: this.multimeterTexture, roughness: 0.4 }),
-      )
-      meterGroup.add(meterBody)
-
-      // Test probe with flexible insulated cable
-      const probe = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.006, 0.003, 0.18),
-        new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.3 }),
-      )
-      probe.position.set(0, -0.28, 0.08)
-      probe.rotation.x = 1.1
-      rightForearm.add(probe)
-    } else if (data.prop === 'clipboard') {
-      // Left arm tucks clipboard, right hand holds inspection pen
-      leftArm.rotation.set(0.35, 0.15, 0.1)
-      leftForearm.rotation.set(-0.7, -0.1, -0.15)
-
-      rightArm.rotation.set(0.45, -0.2, -0.1)
-      rightForearm.rotation.set(-0.55, 0.1, 0.15)
-
-      const boardGroup = new THREE.Group()
-      boardGroup.position.set(0.06, -0.24, 0.06)
-      boardGroup.rotation.set(-0.45, 0.2, -0.1)
-      leftForearm.add(boardGroup)
-
-      const board = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.28, 0.012),
-        new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7 }),
-      )
-      boardGroup.add(board)
-
-      const paper = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.19, 0.24),
-        new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.9 }),
-      )
-      paper.position.z = 0.008
-      boardGroup.add(paper)
-
-      const clip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.018), this.sharedMaterials.reflective)
-      clip.position.set(0, 0.12, 0.012)
-      boardGroup.add(clip)
-    } else {
-      // Tools & relaxed inspection stance
-      leftArm.rotation.set(0.2, 0.05, 0.1)
-      leftForearm.rotation.set(-0.35, 0, 0)
-
-      rightArm.rotation.set(0.55, -0.15, -0.2)
-      rightForearm.rotation.set(-0.75, 0.1, 0.1)
-
-      const tool = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.006, 0.22),
-        this.sharedMaterials.reflective,
-      )
-      tool.position.set(0, -0.28, 0.08)
-      tool.rotation.x = 0.8
-      rightForearm.add(tool)
+      if (cover || inside) {
+        console.warn('[campus] technician still under cover', agent.data.id, {
+          at: [p.x, p.y, p.z].map((n) => +n.toFixed(2)),
+          cover: cover?.name ?? null,
+          inside,
+        })
+      }
     }
 
-    return {
-      root,
-      head,
-      neck,
-      torso,
-      leftArm,
-      leftForearm,
-      rightArm,
-      rightForearm,
-      leftLeg,
-      leftShin,
-      rightLeg,
-      rightShin,
-    }
+    console.info(`[campus] technicians: ${this.agents.length} characters, idle + walk`)
   }
 
   getTechniciansList() {
@@ -1005,68 +426,470 @@ export class TechnicianSystem {
   }
 
   getTechnicianById(id: string) {
-    return TECHNICIANS.find((t) => t.id === id)
+    return TECHNICIANS.find((item) => item.id === id)
+  }
+
+  /** Where the character actually stands, after being moved out from under a roof. */
+  getPlacement(id: string) {
+    return this.agents.find((agent) => agent.data.id === id)?.root.position.clone() ?? null
   }
 
   update(dt: number) {
-    const time = performance.now() * 0.001
-
-    for (const tech of this.technicians) {
-      tech.idlePhase += dt * 1.4
-      tech.lookPhase += dt * 0.35
-
-      // Natural breathing chest heave
-      const breath = Math.sin(tech.idlePhase) * 0.014
-      tech.torso.position.y = 0.09 + breath * 0.5
-      tech.torso.scale.set(1.15 + breath * 0.4, 1.0, 0.75 + breath * 0.4)
-
-      // Smooth subtle head inspection scanning
-      const lookYaw = Math.sin(tech.lookPhase) * 0.28 + Math.sin(tech.lookPhase * 1.7) * 0.12
-      const lookPitch = Math.cos(tech.lookPhase * 0.7) * 0.08 + 0.06
-      tech.head.rotation.y = lookYaw
-      tech.head.rotation.x = lookPitch
-
-      // Patrol movement for mobile technicians
-      if (tech.data.isPatrolling && tech.data.patrolPoints && tech.data.patrolPoints.length >= 2) {
-        const points = tech.data.patrolPoints
-        const speed = 0.95 // m/s natural walking speed
-        const currentPt = points[tech.patrolIndex]!
-        const nextPt = points[(tech.patrolIndex + 1) % points.length]!
-
-        const pA = blenderToThree(...currentPt)
-        const pB = blenderToThree(...nextPt)
-        pA.y = tech.groundY
-        pB.y = tech.groundY
-        const segmentDist = pA.distanceTo(pB)
-
-        tech.patrolProgress += (speed * dt) / Math.max(0.1, segmentDist)
-        if (tech.patrolProgress >= 1) {
-          tech.patrolProgress = 0
-          tech.patrolIndex = (tech.patrolIndex + 1) % points.length
-        }
-
-        tech.root.position.lerpVectors(pA, pB, tech.patrolProgress)
-
-        const dir = new THREE.Vector3().subVectors(pB, pA).normalize()
-        if (dir.lengthSq() > 1e-4) {
-          const targetAngle = Math.atan2(dir.x, dir.z)
-          tech.root.rotation.y = targetAngle
-        }
-
-        // Natural walking kinematics (leg swing & knee flex)
-        const walkCycle = time * 4.8
-        const legSwing = Math.sin(walkCycle) * 0.38
-        const kneeFlex = Math.max(0, Math.sin(walkCycle + Math.PI * 0.5)) * 0.4
-        const kneeFlexOpp = Math.max(0, Math.sin(walkCycle - Math.PI * 0.5)) * 0.4
-
-        tech.leftLeg.rotation.x = legSwing
-        tech.leftShin.rotation.x = kneeFlex
-        tech.rightLeg.rotation.x = -legSwing
-        tech.rightShin.rotation.x = kneeFlexOpp
-
-        // Pelvis slight bounce
-        tech.torso.position.y = 0.09 + Math.abs(Math.sin(walkCycle * 2)) * 0.02
-      }
+    for (const agent of this.agents) {
+      const patrol = agent.data.isPatrolling && (agent.data.patrolPoints?.length ?? 0) >= 2
+      this.setMoving(agent, Boolean(patrol))
+      if (patrol && agent.data.patrolPoints) this.stepPatrol(agent, dt)
+      agent.mixer.update(dt)
     }
   }
+
+  private setMoving(agent: Agent, moving: boolean) {
+    if (agent.moving === moving) return
+    agent.moving = moving
+    const next = moving ? agent.walk : agent.idle
+    const prev = moving ? agent.idle : agent.walk
+    prev.fadeOut(0.2)
+    next.reset().fadeIn(0.2).play()
+    if (!moving) holdIdle(next)
+  }
+
+  private stepPatrol(agent: Agent, dt: number) {
+    const points = agent.route
+    const from = points[agent.patrolIndex]!
+    const to = points[(agent.patrolIndex + 1) % points.length]!
+    const distance = Math.max(0.1, from.distanceTo(to))
+    agent.patrolProgress += (WALK_SPEED * dt) / distance
+    if (agent.patrolProgress >= 1) {
+      agent.patrolProgress = 0
+      agent.patrolIndex = (agent.patrolIndex + 1) % points.length
+    }
+    agent.root.position.lerpVectors(from, to, agent.patrolProgress)
+    const dir = new THREE.Vector3().subVectors(to, from)
+    if (dir.lengthSq() > 1e-4) {
+      dir.normalize()
+      agent.root.rotation.y = Math.atan2(dir.x, dir.z)
+    }
+  }
+
+  private placeOnGround(blender: [number, number, number], scene: THREE.Scene) {
+    const world = blenderToThree(...blender)
+    const outside = this.leaveCoveredFloor(this.pushOutsideBuildings(world.x, world.z))
+    const y = this.snapToGround(outside.x, outside.z, world.y, scene)
+    return new THREE.Vector3(outside.x, y, outside.z)
+  }
+
+  private buildingFootprints(scene: THREE.Scene) {
+    if (this.footprints) return this.footprints
+    scene.updateMatrixWorld(true)
+    const found: Footprint[] = []
+    scene.traverse((obj) => {
+      if (!BUILDING.test(obj.name)) return
+      const box = new THREE.Box3().setFromObject(obj)
+      if (box.isEmpty()) return
+      const size = box.getSize(new THREE.Vector3())
+      if (size.y < 2.2 || size.x < 2 || size.z < 2) return
+      if (size.x > 160 || size.z > 160) return
+      const inset = Math.min(0.7, size.x * 0.06, size.z * 0.06)
+      if (size.x <= inset * 2 || size.z <= inset * 2) return
+      found.push({
+        minX: box.min.x + inset,
+        maxX: box.max.x - inset,
+        minZ: box.min.z + inset,
+        maxZ: box.max.z - inset,
+      })
+    })
+    this.footprints = found
+    console.info(`[campus] building footprints: ${found.length}`)
+    return found
+  }
+
+  /** Slide a point that landed inside a shell out to the nearest sidewalk side. */
+  private pushOutsideBuildings(x: number, z: number) {
+    const boxes = this.footprints ?? []
+    let px = x
+    let pz = z
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false
+      for (const box of boxes) {
+        if (px <= box.minX || px >= box.maxX || pz <= box.minZ || pz >= box.maxZ) continue
+        const left = px - box.minX
+        const right = box.maxX - px
+        const near = pz - box.minZ
+        const far = box.maxZ - pz
+        const margin = 1.15
+        const best = Math.min(left, right, near, far)
+        if (best === left) px = box.minX - margin
+        else if (best === right) px = box.maxX + margin
+        else if (best === near) pz = box.minZ - margin
+        else pz = box.maxZ + margin
+        moved = true
+      }
+      if (!moved) break
+    }
+    if (px !== x || pz !== z) {
+      console.info('[campus] technician moved out of a building', { from: [x, z], to: [px, pz] })
+    }
+    return { x: px, z: pz }
+  }
+
+  /** Roofs, shells and canopy decks. Open equipment yards are not in this list. */
+  private collectCover(scene: THREE.Scene) {
+    if (this.coverMeshes) return this.coverMeshes
+    scene.updateMatrixWorld(true)
+    const found: THREE.Object3D[] = []
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh || !mesh.geometry || !mesh.visible) return
+      if (mesh.userData.decoy || mesh.userData.technicianMesh) return
+      const label = surfaceLabel(mesh)
+      if (!COVER.test(label)) return
+      if (NAMED_GROUND.test(label) && !COVER.test(label)) return
+      found.push(mesh)
+    })
+    this.coverMeshes = found
+    return found
+  }
+
+  /** Largest roof or deck overhead. A small cabinet top does not count. */
+  private coverAbove(x: number, z: number) {
+    const targets = this.coverMeshes
+    if (!targets?.length) return null
+    this.raycaster.set(new THREE.Vector3(x, 0.35, z), this.up)
+    this.raycaster.far = 24
+    const hits = this.raycaster.intersectObjects(targets, false)
+    let best: THREE.Object3D | null = null
+    let bestArea = 8
+    for (const hit of hits) {
+      if (hit.point.y < 1.8 || hit.point.y > 22) continue
+      if (hit.face) {
+        this.faceNormal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld)
+        if (Math.abs(this.faceNormal.y) < 0.55) continue
+      }
+      const box = new THREE.Box3().setFromObject(hit.object)
+      const size = box.getSize(new THREE.Vector3())
+      const area = size.x * size.z
+      if (area <= bestArea) continue
+      best = hit.object
+      bestArea = area
+    }
+    return best
+  }
+
+  /**
+   * Step to the near edge of whatever roof is overhead, so the character
+   * stays on the same site apron instead of the covered floor.
+   */
+  private leaveCoveredFloor(point: { x: number; z: number }) {
+    let px = point.x
+    let pz = point.z
+    for (let pass = 0; pass < 5; pass++) {
+      const cover = this.coverAbove(px, pz)
+      if (!cover) break
+      const box = new THREE.Box3().setFromObject(cover)
+      if (box.isEmpty()) break
+      const left = px - box.min.x
+      const right = box.max.x - px
+      const near = pz - box.min.z
+      const far = box.max.z - pz
+      const margin = 1.8
+      const best = Math.min(left, right, near, far)
+      const nextX = best === left ? box.min.x - margin : best === right ? box.max.x + margin : px
+      const nextZ = best === near ? box.min.z - margin : best === far ? box.max.z + margin : pz
+      if (Math.hypot(nextX - px, nextZ - pz) < 0.2) break
+      console.warn('[campus] technician left a covered floor', cover.name, [px, pz], [nextX, nextZ])
+      px = nextX
+      pz = nextZ
+    }
+    return { x: px, z: pz }
+  }
+
+  private walkableMeshes(scene: THREE.Scene) {
+    if (this.groundMeshes) return this.groundMeshes
+    scene.updateMatrixWorld(true)
+    const targets: THREE.Object3D[] = []
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh || !mesh.geometry || !mesh.visible) return
+      if (mesh.userData.decoy || mesh.userData.technicianMesh) return
+      if (isInteriorName(mesh.name) || isInteriorName(mesh.parent?.name ?? '')) return
+      const label = surfaceLabel(mesh)
+      // A paving mesh parented under a shell is still the ground. Only the shell itself is skipped.
+      if (BUILDING.test(mesh.name) && !isNamedGround(label)) return
+      if (/^Flow_|source-power-lines|^sky$|edge-canopy/i.test(mesh.name)) return
+      if (isOverheadSurface(label)) return
+      let parent: THREE.Object3D | null = mesh
+      while (parent) {
+        if (parent.name === 'campus-technicians' || parent.name.startsWith('technician:')) return
+        parent = parent.parent
+      }
+      targets.push(mesh)
+    })
+    this.groundMeshes = targets
+    return targets
+  }
+
+  /**
+   * Feet go on grass, paving or asphalt under about 2.4 m.
+   * Roofs, canopy decks, cables and steep faces are skipped.
+   * A canopy hit above the yard yields the ground underneath.
+   * Waypoint heights are cached here; the patrol does not raycast per frame.
+   */
+  private snapToGround(x: number, z: number, _defaultY: number, scene?: THREE.Scene) {
+    const targets = scene ? this.walkableMeshes(scene) : this.groundMeshes
+    if (!targets?.length) return 0
+    this.raycaster.set(new THREE.Vector3(x, 40, z), this.down)
+    this.raycaster.far = 50
+    const hits = this.raycaster.intersectObjects(targets, false)
+    const candidates: THREE.Intersection[] = []
+    for (const hit of hits) {
+      const y = hit.point.y
+      if (y > 2.4 || y < -0.35) continue
+      if (hit.face) {
+        this.faceNormal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld)
+        if (this.faceNormal.y < 0.55) continue
+      }
+      if (isOverheadSurface(surfaceLabel(hit.object))) continue
+      candidates.push(hit)
+    }
+    // Highest remaining surface, unless it is a deck floating over the yard.
+    for (let i = 0; i < candidates.length; i++) {
+      const y = candidates[i]!.point.y
+      const deck = candidates.slice(i + 1).some((hit) => y - hit.point.y > 1.15)
+      if (deck && !isNamedGround(surfaceLabel(candidates[i]!.object))) continue
+      return y
+    }
+    return 0
+  }
+}
+
+/** Modules, canopy steel, rooftops and chillers. Not the yard under them. */
+const OVERHEAD = /seraphim|panneau|toiture|rooftop|chiller|chevron|omb_panne|omb_chevron|omb_poteau|edge-canopy/i
+const NAMED_GROUND = /grass|herbe|gazon|asphalte|asphalt|trettoir|trottoir|voirie|dallage|canopy-ground|world-ground/i
+
+function surfaceLabel(obj: THREE.Object3D) {
+  const mesh = obj as THREE.Mesh
+  const mat = mesh.material
+  const matName = Array.isArray(mat) ? mat.map((entry) => entry.name).join(' ') : (mat?.name ?? '')
+  return `${obj.name} ${obj.parent?.name ?? ''} ${matName}`
+}
+
+function isOverheadSurface(label: string) {
+  if (NAMED_GROUND.test(label) && !OVERHEAD.test(label)) return false
+  return OVERHEAD.test(label)
+}
+
+function isNamedGround(label: string) {
+  return NAMED_GROUND.test(label) && !OVERHEAD.test(label)
+}
+
+function pickClip(clips: THREE.AnimationClip[], pattern: RegExp) {
+  return clips.find((clip) => pattern.test(clip.name))
+}
+
+/** The patrol code moves the character. Hip translation would slide the walk off the path. */
+function inPlace(clip: THREE.AnimationClip | undefined) {
+  if (!clip) return clip
+  const tracks = clip.tracks.filter((track) => !/Hips\.position$/.test(track.name))
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks)
+}
+
+/** Closed shells. Fences and open yards are not buildings. */
+const BUILDING = /coque_du_batiment|BroadwayTheater_A_Building[AB]\b|Poste_garde/i
+/** Building roofs and canopy decks. A module row only pushes the character to the aisle beside it. */
+const COVER = /coque_du_batiment|toiture|rooftop|plafond|omb_panne|omb_chevron|seraphim|panneau|BroadwayTheater_A_Building[AB]\b/i
+
+function prepareHead(model: THREE.Object3D) {
+  model.traverse((obj) => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const entry of list) {
+      const std = entry as THREE.MeshStandardMaterial
+      if (std && /head/i.test(std.name)) sealHeadMaterial(std)
+    }
+  })
+}
+
+/** The head atlas is opaque. Transmission was punching a glass hole through the face. */
+function sealHeadMaterial(std: THREE.MeshStandardMaterial) {
+  const phys = std as THREE.MeshPhysicalMaterial
+  phys.transparent = false
+  phys.opacity = 1
+  phys.alphaTest = 0
+  phys.depthWrite = true
+  phys.side = THREE.FrontSide
+  phys.normalScale?.set(0.4, 0.4)
+  phys.transmission = 0
+  phys.transmissionMap = null
+  phys.thickness = 0
+  phys.needsUpdate = true
+}
+
+/** Freeze the standing moment. The rest of the idle puts a glove on the nose. */
+function holdIdle(action: THREE.AnimationAction) {
+  action.paused = true
+  action.time = Math.min(IDLE_HOLD, Math.max(0, action.getClip().duration - 0.05))
+  action.play()
+}
+
+/**
+ * The shell UV does not match the helmet bake, so painting it on smears a
+ * yellow shard across the brim. Hide that stray triangle and stick the real
+ * NETIS mark on the front of the helmet.
+ */
+async function applyHelmetLogo(model: THREE.Object3D) {
+  model.traverse((obj) => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    if (list.some((entry) => /^material\.003$/i.test((entry as THREE.Material)?.name ?? ''))) {
+      mesh.visible = false
+    }
+  })
+
+  const head = model.getObjectByName('mixamorigHead')
+  if (!head) return
+  const tex = await new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}netis_logo.png`)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = THREE.RepeatWrapping
+  tex.repeat.x = -1
+  tex.offset.x = 1
+  const card = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.1, 0.023),
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      color: '#12336e',
+      transparent: true,
+      alphaTest: 0.35,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  )
+  card.name = 'helmet-logo'
+  card.frustumCulled = false
+  card.renderOrder = 3
+  model.updateMatrixWorld(true)
+  const front = helmetFront(model)
+  card.position.copy(front)
+  card.position.z -= 0.028
+  card.rotation.y = Math.PI
+  head.attach(card)
+}
+
+/** Forehead of the shell: in front, between the brim and the crown opening. */
+function helmetFront(model: THREE.Object3D) {
+  const v = new THREE.Vector3()
+  const points: THREE.Vector3[] = []
+  model.traverse((obj) => {
+    const mesh = obj as THREE.SkinnedMesh
+    if (!mesh.isSkinnedMesh) return
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    if (!list.some((entry) => /helmet/i.test((entry as THREE.Material)?.name ?? ''))) return
+    mesh.skeleton.update()
+    const pos = mesh.geometry.attributes.position
+    if (!pos) return
+    for (let i = 0; i < pos.count; i++) {
+      mesh.getVertexPosition(i, v)
+      v.applyMatrix4(mesh.matrixWorld)
+      points.push(v.clone())
+    }
+  })
+  if (points.length === 0) return new THREE.Vector3(0, 1.65, -0.1)
+  const ys = points.map((point) => point.y).sort((a, b) => a - b)
+  const yBot = ys[0]!
+  const yTop = ys[ys.length - 1]!
+  const span = Math.max(0.05, yTop - yBot)
+  const yLow = yBot + span * 0.38
+  const yHigh = yBot + span * 0.58
+  const band = points.filter((point) => point.y >= yLow && point.y <= yHigh)
+  const pool = band.length > 0 ? band : points
+  const zs = pool.map((point) => point.z).sort((a, b) => a - b)
+  const zFront = zs[Math.floor(zs.length * 0.2)]!
+  const face = pool.filter((point) => point.z <= zFront)
+  const used = face.length > 0 ? face : pool
+  const center = new THREE.Vector3()
+  for (const point of used) center.add(point)
+  center.multiplyScalar(1 / used.length)
+  center.z = Math.min(...used.map((point) => point.z))
+  return center
+}
+
+function seatOnGround(model: THREE.Object3D, idleClip: THREE.AnimationClip, walkClip: THREE.AnimationClip) {
+  const mixer = new THREE.AnimationMixer(model)
+  const idle = mixer.clipAction(idleClip)
+  holdIdle(idle)
+  mixer.update(0)
+  model.updateMatrixWorld(true)
+  const box = posedBounds(model)
+  const height = Math.max(0.01, box.max.y - box.min.y)
+  if (height < 1.4 || height > 2.2) {
+    model.scale.multiplyScalar(TARGET_HEIGHT / height)
+    model.updateMatrixWorld(true)
+  }
+
+  const standing = bootContact(model)
+  mixer.stopAllAction()
+  const walk = mixer.clipAction(walkClip)
+  walk.setEffectiveWeight(1)
+  walk.play()
+  let lowest = standing.y
+  const steps = 12
+  for (let i = 0; i < steps; i++) {
+    mixer.setTime((walkClip.duration * i) / steps)
+    model.updateMatrixWorld(true)
+    lowest = Math.min(lowest, bootContact(model).y)
+  }
+  model.position.x -= standing.x
+  model.position.z -= standing.z
+  model.position.y += SOLE_CLEARANCE - lowest
+  mixer.stopAllAction()
+  holdIdle(mixer.clipAction(idleClip))
+  mixer.update(0)
+}
+
+/** Centre of the boot vertices that are actually touching down. */
+function bootContact(model: THREE.Object3D) {
+  const v = new THREE.Vector3()
+  let minY = Infinity
+  const points: THREE.Vector3[] = []
+  model.updateMatrixWorld(true)
+  model.traverse((obj) => {
+    const mesh = obj as THREE.SkinnedMesh
+    if (!mesh.isSkinnedMesh) return
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    if (!list.some((entry) => /#66|boot/i.test((entry as THREE.Material)?.name ?? ''))) return
+    mesh.skeleton.update()
+    const pos = mesh.geometry.attributes.position
+    if (!pos) return
+    for (let i = 0; i < pos.count; i++) {
+      mesh.getVertexPosition(i, v)
+      v.applyMatrix4(mesh.matrixWorld)
+      if (v.y < minY) minY = v.y
+      points.push(v.clone())
+    }
+  })
+  const contact = points.filter((point) => point.y <= minY + 0.04)
+  const used = contact.length > 0 ? contact : points
+  const center = new THREE.Vector3()
+  if (used.length === 0) return center
+  for (const point of used) center.add(point)
+  center.multiplyScalar(1 / used.length)
+  center.y = minY
+  return center
+}
+
+function posedBounds(model: THREE.Object3D) {
+  const box = new THREE.Box3()
+  model.updateMatrixWorld(true)
+  model.traverse((obj) => {
+    const mesh = obj as THREE.SkinnedMesh
+    if (!mesh.isSkinnedMesh) return
+    mesh.skeleton.update()
+    mesh.computeBoundingBox()
+    if (!mesh.boundingBox || mesh.boundingBox.isEmpty()) return
+    box.union(mesh.boundingBox.clone().applyMatrix4(mesh.matrixWorld))
+  })
+  if (box.isEmpty()) box.setFromObject(model)
+  return box
 }

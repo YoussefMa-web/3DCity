@@ -32,7 +32,8 @@ type TrafficAgent = {
   rideHeight: number
   /** Added to path yaw so measured local forward maps onto the lane tangent. */
   yawBias: number
-  fade: number
+  /** +1 toward the end of the spline, −1 back along the same lane. */
+  direction: 1 | -1
 }
 
 type LengthForward = {
@@ -57,9 +58,9 @@ function vehicleClass(name: string): 'bus' | 'sedan' | 'suv' {
 }
 
 function defaultSpeed(kind: 'bus' | 'sedan' | 'suv') {
-  if (kind === 'bus') return 20 * KMH
-  if (kind === 'suv') return 32 * KMH
-  return 36 * KMH
+  if (kind === 'bus') return 56 * KMH
+  if (kind === 'suv') return 90 * KMH
+  return 100 * KMH
 }
 
 /** Yaw that aims local −Z along horizontal (tx, tz). */
@@ -232,18 +233,19 @@ export class TrafficSystem {
 
     for (const agent of this.agents) {
       const { route } = agent
-      agent.progress += (agent.speed * step) / route.length
-      if (agent.progress >= 1) agent.progress = 0
+      agent.progress += (agent.direction * agent.speed * step) / route.length
+      if (agent.progress >= 1) {
+        agent.progress = 1
+        agent.direction = -1
+      } else if (agent.progress <= 0) {
+        agent.progress = 0
+        agent.direction = 1
+      }
 
-      const p = agent.progress
-      let fade = 1
-      if (p < 0.04) fade = p / 0.04
-      else if (p > 0.96) fade = (1 - p) / 0.04
-      this.setFade(agent, THREE.MathUtils.clamp(fade, 0, 1))
-
-      const u = THREE.MathUtils.clamp(agent.progress, 0, 0.9999)
+      const u = THREE.MathUtils.clamp(agent.progress, 0.001, 0.999)
       route.curve.getPointAt(u, _pos)
       route.curve.getTangentAt(u, _tan)
+      if (agent.direction < 0) _tan.negate()
       _tan.y = 0
       if (_tan.lengthSq() < 1e-8) continue
       _tan.normalize()
@@ -384,7 +386,8 @@ export class TrafficSystem {
 
       const picked = this.pickRoute(worldPos, kind, load)
       if (!picked) continue
-      if (picked.dist > MAX_SNAP_M) {
+      const snap = kind === 'bus' ? 90 : MAX_SNAP_M
+      if (picked.dist > snap) {
         console.info(`[campus] traffic: leave parked ${obj.name} (nearest lane ${picked.dist.toFixed(1)}m)`)
         continue
       }
@@ -435,12 +438,11 @@ export class TrafficSystem {
     let bestDist = Infinity
 
     for (const route of this.routes) {
-      // Bus stays on the wide east boulevard only (ns-x64*).
-      if (kind === 'bus' && !route.id.includes('ns-x64')) continue
       const u = this.nearestProgress(route, pos)
       route.curve.getPointAt(u, _pos)
       const dist = Math.hypot(_pos.x - pos.x, _pos.z - pos.z)
-      const score = dist + (load.get(route.id) ?? 0) * 15
+      const busBias = kind === 'bus' ? route.length * 0.015 : 0
+      const score = dist + (load.get(route.id) ?? 0) * 15 - busBias
       if (score < bestScore) {
         bestScore = score
         bestDist = dist
@@ -535,14 +537,7 @@ export class TrafficSystem {
       speed: defaultSpeed(kind) * (0.95 + Math.random() * 0.1),
       rideHeight,
       yawBias,
-      fade: 1,
+      direction: 1,
     })
-  }
-
-  private setFade(agent: TrafficAgent, fade: number) {
-    if (Math.abs(agent.fade - fade) < 0.02 && fade > 0.04 && fade < 0.96) return
-    agent.fade = fade
-    agent.root.visible = fade > 0.02
-    agent.root.scale.setScalar(fade > 0.98 ? 1 : Math.max(0.001, fade))
   }
 }

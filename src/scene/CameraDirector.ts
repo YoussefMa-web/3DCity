@@ -21,7 +21,7 @@ export class CameraDirector {
   private fromFov = 48
   private toFov = 48
   private t = 0
-  private duration = 1.4
+  private duration = 0.38
   private onDone: (() => void) | null = null
 
   constructor(
@@ -33,7 +33,7 @@ export class CameraDirector {
     return this.animating
   }
 
-  flyTo(shot: CameraShot, duration = 1.4, onDone?: () => void) {
+  flyTo(shot: CameraShot, duration = 0.38, onDone?: () => void) {
     this.fromPos.copy(this.camera.position)
     this.fromTarget.copy(this.controls.target)
     this.toPos.copy(shot.position)
@@ -47,7 +47,7 @@ export class CameraDirector {
 
     const dist = this.fromPos.distanceTo(this.toPos)
     this.midPos.copy(this.fromPos).lerp(this.toPos, 0.5)
-    this.midPos.y += Math.min(28, dist * 0.14)
+    this.midPos.y += Math.min(8, dist * 0.04)
 
     if (shot.minDistance != null) this.controls.minDistance = shot.minDistance
     if (shot.maxDistance != null) this.controls.maxDistance = shot.maxDistance
@@ -61,7 +61,7 @@ export class CameraDirector {
   update(dt: number) {
     if (!this.animating) return
     this.t += dt / this.duration
-    const k = easeInOutCubic(Math.min(1, this.t))
+    const k = easeOutCubic(Math.min(1, this.t))
     this.arcA.copy(this.fromPos).lerp(this.midPos, k)
     this.arcB.copy(this.midPos).lerp(this.toPos, k)
     this.camera.position.copy(this.arcA).lerp(this.arcB, k)
@@ -85,6 +85,6 @@ export class CameraDirector {
   }
 }
 
-function easeInOutCubic(x: number) {
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2
+function easeOutCubic(x: number) {
+  return 1 - Math.pow(1 - x, 3)
 }

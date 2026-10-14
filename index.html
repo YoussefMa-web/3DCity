@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>NETIS — Campus Interactif 3D & Supervision</title>
+    <title>NETIS — Interactive 3D Campus & Supervision</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,74 +23,72 @@
       <!-- Main Topbar -->
       <header class="topbar" id="main-topbar">
         <div class="topbar-left">
-          <button id="brand-overview-btn" class="brand" type="button" title="Retour à la vue d'ensemble du campus">
-            <span class="logo">N</span>
+          <button id="brand-overview-btn" class="brand" type="button" title="Back to the campus overview">
+            <img src="/netis_logo.png" alt="NETIS" class="brand-logo" />
             <div class="brand-text">
-              <strong>NETIS</strong>
-              <small>Campus Interactif</small>
+              <small>Interactive Campus</small>
             </div>
-            <span class="brand-badge-live"><span class="pulse-dot"></span> LIVE 3D</span>
           </button>
         </div>
 
-        <nav id="brand-bar" class="brand-bar" aria-label="Univers NETIS"></nav>
+        <nav id="brand-bar" class="brand-bar" aria-label="NETIS businesses"></nav>
 
         <div class="topbar-right">
           <!-- Search button -->
-          <button id="btn-search" class="hud-btn" type="button" title="Recherche rapide (Ctrl + K)" aria-label="Rechercher une installation">
+          <button id="btn-search" class="hud-btn" type="button" title="Quick search (Ctrl + K)" aria-label="Search an installation">
             <span class="hud-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-            <span class="hud-btn-text">Rechercher</span>
+            <span class="hud-btn-text">Search</span>
             <kbd class="hud-kbd">⌘K</kbd>
           </button>
 
           <!-- Camera Views Dropdown -->
           <div class="hud-dropdown-wrap">
-            <button id="btn-camera-menu" class="hud-btn" type="button" title="Changer l'angle de vue de caméra" aria-expanded="false" aria-haspopup="true">
+            <button id="btn-camera-menu" class="hud-btn" type="button" title="Change the camera angle" aria-expanded="false" aria-haspopup="true">
               <span class="hud-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor"/></svg></span>
-              <span class="hud-btn-text">Vues</span>
+              <span class="hud-btn-text">Views</span>
             </button>
             <div id="dropdown-camera" class="hud-dropdown" hidden>
-              <div class="dropdown-header">Angles de caméra</div>
+              <div class="dropdown-header">Camera angles</div>
               <button type="button" class="dropdown-item" data-cam="overview">
-                <span>Vue d'ensemble générale</span>
+                <span>Campus overview</span>
                 <kbd>0</kbd>
               </button>
               <button type="button" class="dropdown-item" data-cam="iso">
-                <span>Perspective isométrique</span>
+                <span>Isometric view</span>
                 <kbd>I</kbd>
               </button>
               <button type="button" class="dropdown-item" data-cam="top">
-                <span>Vue zénithale (Plan 2D)</span>
+                <span>Top-down plan</span>
                 <kbd>T</kbd>
               </button>
               <div class="dropdown-divider"></div>
-              <div class="dropdown-header">Focus direct</div>
-              <button type="button" class="dropdown-item" data-cam="solar">Centrale Solaire & BESS</button>
-              <button type="button" class="dropdown-item" data-cam="telecom">Pylône & Infrastructure Télécom</button>
-              <button type="button" class="dropdown-item" data-cam="data">Data Center & Salle NOC</button>
-              <button type="button" class="dropdown-item" data-cam="poste">Poste Source 60/22 kV</button>
+              <div class="dropdown-header">Jump to</div>
+              <button type="button" class="dropdown-item" data-cam="telecom">Telecom, fiber & data center</button>
+              <button type="button" class="dropdown-item" data-cam="energies">Solar plant, BESS & substations</button>
+              <button type="button" class="dropdown-item" data-cam="managed">NOC & managed services</button>
+              <button type="button" class="dropdown-item" data-cam="poste">60/22 kV source substation</button>
             </div>
           </div>
 
           <!-- Sky & Lighting Menu -->
           <div class="hud-dropdown-wrap">
-            <button id="btn-sky-menu" class="hud-btn" type="button" title="Ambiance lumineuse & ciel HDRI" aria-expanded="false" aria-haspopup="true">
+            <button id="btn-sky-menu" class="hud-btn" type="button" title="Lighting and HDRI sky" aria-expanded="false" aria-haspopup="true">
               <span class="hud-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>
-              <span class="hud-btn-text">Ambiance</span>
+              <span class="hud-btn-text">Sky</span>
             </button>
             <div id="dropdown-sky" class="hud-dropdown" hidden>
-              <div class="dropdown-header">Ciel & Éclairage HDRI</div>
-              <button type="button" class="dropdown-item is-active" data-hdri="clouds">
-                <span>Ciel nuageux éclatant (2K)</span>
-                <small>Idéal architecture</small>
+              <div class="dropdown-header">HDRI sky & lighting</div>
+              <button type="button" class="dropdown-item" data-hdri="clouds">
+                <span>Bright cloudy sky (2K)</span>
+                <small>Best for architecture</small>
               </button>
               <button type="button" class="dropdown-item" data-hdri="clear">
-                <span>Ciel bleu limpide (2K)</span>
-                <small>Plein soleil</small>
+                <span>Clear blue sky (2K)</span>
+                <small>Full sun</small>
               </button>
-              <button type="button" class="dropdown-item" data-hdri="puresky">
-                <span>Kloofendal Pure Sky (2K)</span>
-                <small>Éclairage doux</small>
+              <button type="button" class="dropdown-item is-active" data-hdri="puresky">
+                <span>Blue sky and clouds (2K)</span>
+                <small>Clear day</small>
               </button>
               <button type="button" class="dropdown-item" data-hdri="campus">
                 <span>Campus HDRI (1K)</span>
@@ -101,111 +99,111 @@
 
           <!-- Technicians Field Teams Dropdown -->
           <div class="hud-dropdown-wrap">
-            <button id="btn-techs-menu" class="hud-btn" type="button" title="Équipes et techniciens sur le terrain" aria-expanded="false" aria-haspopup="true">
+            <button id="btn-techs-menu" class="hud-btn" type="button" title="Field teams and technicians" aria-expanded="false" aria-haspopup="true">
               <span class="hud-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 18a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4v2H2v-2z"/><path d="M6 10a6 6 0 0 1 12 0v2H6v-2z"/><line x1="2" y1="12" x2="22" y2="12"/></svg></span>
-              <span class="hud-btn-text">Techniciens (10)</span>
+              <span class="hud-btn-text">Technicians (10)</span>
             </button>
             <div id="dropdown-techs" class="hud-dropdown" hidden style="width: 310px; max-height: 380px; overflow-y: auto;">
-              <div class="dropdown-header">Équipes de maintenance</div>
+              <div class="dropdown-header">Maintenance teams</div>
               <button type="button" class="dropdown-item" data-tech="tech-solar-field">
                 <span>Karim Bennani</span>
-                <small>☀️ Centrale Solaire</small>
+                <small>Solar plant</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-solar-inverter">
                 <span>Youssef El Amrani</span>
-                <small>☀️ Onduleurs Quadro</small>
+                <small>Quadro inverters</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-solar-bess">
                 <span>Mehdi Chraibi</span>
-                <small>☀️ Conteneur BESS</small>
+                <small>BESS container</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-solar-tech">
                 <span>Tariq Mansouri</span>
-                <small>☀️ Local TGBT</small>
+                <small>LV switchboard room</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-tel-tower">
                 <span>Bilal Haddad</span>
-                <small>📡 Pylône 41m</small>
+                <small>41 m tower</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-tel-cabinet">
                 <span>Hamza Tahiri</span>
-                <small>📡 Armoires 48V</small>
+                <small>48 V cabinets</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-fiber-sro">
                 <span>Salma Ouazzani</span>
-                <small>📡 SRO Fibre Optique</small>
+                <small>Fiber street cabinet</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-data-power">
                 <span>Rachid Belkacem</span>
-                <small>💻 Énergie Data Center</small>
+                <small>Data center power</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-data-guard">
                 <span>Othmane Senhaji</span>
-                <small>💻 Poste Sécurité</small>
+                <small>Security post</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-poste-source">
                 <span>Adil Kabbaj</span>
-                <small>⚡ Poste Source 60kV</small>
+                <small>60 kV source substation</small>
               </button>
               <button type="button" class="dropdown-item" data-tech="tech-patrol-solar">
                 <span>Nabil Fassi</span>
-                <small>🚶 Ronde Solaire</small>
+                <small>Solar patrol</small>
               </button>
             </div>
           </div>
 
           <!-- Auto-Tour / Presentation Mode -->
-          <button id="btn-tour" class="hud-btn hud-btn-accent" type="button" title="Lancer la visite guidée automatique (Espace)" aria-label="Visite guidée">
+          <button id="btn-tour" class="hud-btn hud-btn-accent" type="button" title="Start the automatic guided tour (Space)" aria-label="Guided tour">
             <span class="hud-btn-icon" id="tour-icon"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 19 12 6 20 6 4"/></svg></span>
-            <span class="hud-btn-text" id="tour-label">Visite guidée</span>
+            <span class="hud-btn-text" id="tour-label">Guided tour</span>
           </button>
 
           <!-- Audio FX toggle -->
-          <button id="btn-audio" class="hud-btn hud-btn-icon-only" type="button" title="Activer / Couper les sons de navigation" aria-label="Son">
+          <button id="btn-audio" class="hud-btn hud-btn-icon-only" type="button" title="Turn navigation sounds on or off" aria-label="Sound">
             <svg id="icon-sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
             <svg id="icon-sound-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
           </button>
 
           <!-- Zen / Hide UI toggle -->
-          <button id="btn-zen" class="hud-btn hud-btn-icon-only" type="button" title="Mode Zen plein écran (Touche H)" aria-label="Masquer l'interface">
+          <button id="btn-zen" class="hud-btn hud-btn-icon-only" type="button" title="Zen full-screen mode (H)" aria-label="Hide the interface">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
 
           <!-- Help / Shortcuts button -->
-          <button id="btn-help" class="hud-btn hud-btn-icon-only" type="button" title="Raccourcis clavier & Aide (?)" aria-label="Aide">
+          <button id="btn-help" class="hud-btn hud-btn-icon-only" type="button" title="Keyboard shortcuts and help (?)" aria-label="Help">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </button>
         </div>
       </header>
 
       <!-- Restore UI button in Zen Mode -->
-      <button id="btn-zen-restore" class="zen-restore-btn" type="button" title="Restaurer l'interface (Touche H)" hidden>
+      <button id="btn-zen-restore" class="zen-restore-btn" type="button" title="Restore the interface (H)" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-        <span>Afficher l'interface</span>
+        <span>Show the interface</span>
       </button>
 
       <!-- Bottom Parcours / Tour Timeline Bar -->
       <section id="parcours" class="parcours" hidden>
         <div class="parcours-head">
           <div class="parcours-title-group">
-            <span class="parcours-sector-badge" id="parcours-sector">SECTEUR</span>
-            <span id="parcours-label" class="parcours-label">Parcours</span>
+            <span class="parcours-sector-badge" id="parcours-sector">SECTOR</span>
+            <span id="parcours-label" class="parcours-label">Tour</span>
           </div>
           <div class="parcours-actions">
-            <button id="parcours-tour-toggle" class="parcours-btn-tour" type="button" title="Lecture automatique du parcours">
+            <button id="parcours-tour-toggle" class="parcours-btn-tour" type="button" title="Play the tour automatically">
               <svg id="parcours-tour-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="6 4 19 12 6 20 6 4"/></svg>
               <span id="parcours-tour-text">Auto</span>
             </button>
-            <button id="back-overview" class="parcours-btn-subtle" type="button">Vue d’ensemble</button>
+            <button id="back-overview" class="parcours-btn-subtle" type="button">Overview</button>
           </div>
         </div>
 
         <div class="parcours-timeline-wrap">
-          <button id="step-prev" class="parcours-nav-arrow" type="button" aria-label="Étape précédente">
+          <button id="step-prev" class="parcours-nav-arrow" type="button" aria-label="Previous step">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div id="step-icons" class="step-icons" role="tablist"></div>
-          <button id="step-next" class="parcours-nav-arrow" type="button" aria-label="Étape suivante">
+          <button id="step-next" class="parcours-nav-arrow" type="button" aria-label="Next step">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
@@ -226,15 +224,15 @@
               <h2 id="panel-title"></h2>
             </div>
           </div>
-          <button id="panel-close" class="panel-close-btn" type="button" aria-label="Fermer le panneau">
+          <button id="panel-close" class="panel-close-btn" type="button" aria-label="Close the panel">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
         <!-- Panel Tabs -->
         <div class="panel-tabs" id="panel-tabs">
-          <button type="button" class="panel-tab is-active" data-tab="overview">Présentation</button>
-          <button type="button" class="panel-tab" data-tab="specs">KPIs & Métriques</button>
+          <button type="button" class="panel-tab is-active" data-tab="overview">Overview</button>
+          <button type="button" class="panel-tab" data-tab="specs">KPIs and metrics</button>
           <button type="button" class="panel-tab" data-tab="noc" id="tab-noc-btn" hidden>Supervision NOC</button>
         </div>
 
@@ -243,12 +241,12 @@
           <div id="panel-tab-overview" class="tab-pane is-active">
             <div id="panel-places" class="place-row" hidden></div>
             <p id="panel-summary" class="panel-summary"></p>
-            <div class="panel-section-title">Points Clés & Ingénierie</div>
+            <div class="panel-section-title">Key points and engineering</div>
             <ul id="panel-points" class="panel-points-list"></ul>
             <div id="panel-benefits" class="benefit-block" hidden></div>
             <div id="panel-flow" class="flow-legend" hidden></div>
             <button id="panel-enter-interior" class="panel-action-btn panel-action-primary panel-enter" type="button" hidden>
-              Entrer dans la salle
+              Enter the room
             </button>
           </div>
 
@@ -259,15 +257,15 @@
               <div class="spec-card">
                 <span class="spec-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5 6v6c0 4 3 6.5 7 8 4-1.5 7-4 7-8V6l-7-3z"/><path d="m9 12 2 2 4-4"/></svg></span>
                 <div>
-                  <strong>Conformité & Normes</strong>
-                  <small>Certification ISO / Tier / OACI / HTA</small>
+                  <strong>Compliance and standards</strong>
+                  <small>ISO / Tier / ICAO / MV certification</small>
                 </div>
               </div>
               <div class="spec-card">
                 <span class="spec-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/></svg></span>
                 <div>
                   <strong>Supervision 24/7</strong>
-                  <small>Télémétrie SCADA & Dispatch NOC</small>
+                  <small>SCADA telemetry and NOC dispatch</small>
                 </div>
               </div>
             </div>
@@ -281,26 +279,41 @@
 
         <!-- Panel Footer with Actions -->
         <div class="panel-footer">
-          <button id="panel-btn-focus" class="panel-action-btn" type="button" title="Recentrer et zoomer sur la structure">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
-            <span>Recentrer</span>
-          </button>
           <div class="panel-footer-nav">
-            <button id="panel-btn-prev" class="panel-action-btn panel-action-subtle" type="button">← Précédent</button>
-            <button id="panel-btn-next" class="panel-action-btn panel-action-primary" type="button">Suivant →</button>
+          <button id="panel-btn-camera" class="panel-action-btn" type="button" title="Place the camera for this point">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>Caméra</span>
+          </button>
+          <button id="panel-btn-focus" class="panel-action-btn" type="button" title="Reframe and zoom on the asset">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+            <span>Reframe</span>
+          </button>
+          </div>
+          <div class="panel-footer-nav">
+            <button id="panel-btn-prev" class="panel-action-btn panel-action-subtle" type="button">← Previous</button>
+            <button id="panel-btn-next" class="panel-action-btn panel-action-primary" type="button">Next →</button>
           </div>
         </div>
       </aside>
 
+      <div id="camera-adjust" class="camera-adjust" hidden>
+        <p id="camera-adjust-label">Tourne la vue avec la souris, puis enregistre-la pour ce point.</p>
+        <div class="camera-adjust-actions">
+          <button id="camera-adjust-save" class="panel-action-btn panel-action-primary" type="button">Enregistrer</button>
+          <button id="camera-adjust-reset" class="panel-action-btn" type="button">Réinitialiser</button>
+          <button id="camera-adjust-close" class="panel-action-btn panel-action-subtle" type="button">Fermer</button>
+        </div>
+      </div>
+
       <div id="interior-bar" class="interior-bar" hidden>
         <div class="interior-bar-copy">
-          <strong id="interior-title">Salle technique</strong>
+          <strong id="interior-title">Technical room</strong>
           <span id="interior-step">1 / 1</span>
         </div>
         <div class="interior-bar-actions">
           <button id="interior-prev" class="panel-action-btn" type="button">←</button>
           <button id="interior-next" class="panel-action-btn" type="button">→</button>
-          <button id="interior-exit" class="panel-action-btn panel-action-primary" type="button">Quitter l’intérieur</button>
+          <button id="interior-exit" class="panel-action-btn panel-action-primary" type="button">Leave the interior</button>
         </div>
       </div>
 
@@ -309,19 +322,19 @@
         <div class="tech-card-avatar">👷</div>
         <div class="tech-card-body">
           <div class="tech-card-header">
-            <strong id="tech-card-name">Nom du Technicien</strong>
-            <span id="tech-card-role" class="tech-card-badge">EPI Conforme</span>
+            <strong id="tech-card-name">Role</strong>
+            <span id="tech-card-role" class="tech-card-badge" hidden>EPI</span>
           </div>
-          <div id="tech-card-zone" class="tech-card-zone">Zone d'intervention</div>
-          <p id="tech-card-task" class="tech-card-task">Tâche en cours...</p>
+          <div id="tech-card-zone" class="tech-card-zone" hidden>Zone</div>
+          <p id="tech-card-task" class="tech-card-task">Current task</p>
         </div>
-        <button id="tech-card-close" class="tech-card-close-btn" type="button" aria-label="Fermer">
+        <button id="tech-card-close" class="tech-card-close-btn" type="button" aria-label="Close">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
       <!-- Global Search / Command Palette Dialog -->
-      <dialog id="search-dialog" class="search-dialog" aria-label="Rechercher une installation du campus">
+      <dialog id="search-dialog" class="search-dialog" aria-label="Search a campus installation">
         <div class="search-dialog-inner">
           <div class="search-input-wrap">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -329,26 +342,26 @@
               type="search"
               id="search-input"
               class="search-input"
-              placeholder="Rechercher un équipement, pylône, datacenter, onduleur..."
+              placeholder="Search equipment, tower, data center, inverter..."
               autocomplete="off"
               spellcheck="false"
             />
-            <kbd class="search-esc-badge" id="search-close-btn">Échap</kbd>
+            <kbd class="search-esc-badge" id="search-close-btn">Esc</kbd>
           </div>
 
           <div class="search-filters">
-            <button type="button" class="search-filter-chip is-active" data-filter="all">Tous (20+)</button>
-            <button type="button" class="search-filter-chip" data-filter="solar">☀️ Solar</button>
-            <button type="button" class="search-filter-chip" data-filter="telecom">📡 Telecom</button>
-            <button type="button" class="search-filter-chip" data-filter="data">💻 Data</button>
+            <button type="button" class="search-filter-chip is-active" data-filter="all">All (20+)</button>
+            <button type="button" class="search-filter-chip" data-filter="telecom">Telecom & Data</button>
+            <button type="button" class="search-filter-chip" data-filter="energies">Energies</button>
+            <button type="button" class="search-filter-chip" data-filter="managed">Managed Services</button>
           </div>
 
           <div id="search-results" class="search-results"></div>
 
           <div class="search-footer">
-            <span><kbd>↑</kbd><kbd>↓</kbd> Naviguer</span>
-            <span><kbd>↵</kbd> Sélectionner</span>
-            <span><kbd>Échap</kbd> Fermer</span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+            <span><kbd>↵</kbd> Select</span>
+            <span><kbd>Esc</kbd> Close</span>
           </div>
         </div>
       </dialog>
@@ -357,43 +370,43 @@
       <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-dialog-title">
         <div class="help-dialog-inner">
           <div class="help-header">
-            <h3 id="help-dialog-title">Raccourcis clavier & Navigation</h3>
-            <button type="button" id="help-close-btn" class="panel-close-btn" aria-label="Fermer">
+            <h3 id="help-dialog-title">Keyboard shortcuts and navigation</h3>
+            <button type="button" id="help-close-btn" class="panel-close-btn" aria-label="Close">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
 
           <div class="help-grid">
             <div class="help-group">
-              <h4>Navigation Secteurs</h4>
-              <div class="help-row"><kbd>1</kbd> <span>NETIS Solar (Photovoltaïque)</span></div>
-              <div class="help-row"><kbd>2</kbd> <span>NETIS Telecom (Réseau & Pylône)</span></div>
-              <div class="help-row"><kbd>3</kbd> <span>NETIS Data (Data Center & NOC)</span></div>
-              <div class="help-row"><kbd>0</kbd> / <kbd>Échap</kbd> <span>Vue d'ensemble générale</span></div>
+              <h4>Sector navigation</h4>
+              <div class="help-row"><kbd>1</kbd> <span>NETIS TELECOM & DATA</span></div>
+              <div class="help-row"><kbd>2</kbd> <span>NETIS ENERGIES</span></div>
+              <div class="help-row"><kbd>3</kbd> <span>NETIS MANAGED SERVICES</span></div>
+              <div class="help-row"><kbd>0</kbd> / <kbd>Esc</kbd> <span>Campus overview</span></div>
             </div>
 
             <div class="help-group">
-              <h4>Parcours & Visite</h4>
-              <div class="help-row"><kbd>→</kbd> / <kbd>↓</kbd> <span>Étape suivante</span></div>
-              <div class="help-row"><kbd>←</kbd> / <kbd>↑</kbd> <span>Étape précédente</span></div>
-              <div class="help-row"><kbd>Espace</kbd> <span>Lancer / Pause visite guidée</span></div>
-              <div class="help-row"><kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> <span>Recherche rapide</span></div>
+              <h4>Tour</h4>
+              <div class="help-row"><kbd>→</kbd> / <kbd>↓</kbd> <span>Next step</span></div>
+              <div class="help-row"><kbd>←</kbd> / <kbd>↑</kbd> <span>Previous step</span></div>
+              <div class="help-row"><kbd>Space</kbd> <span>Start or pause the guided tour</span></div>
+              <div class="help-row"><kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> <span>Quick search</span></div>
             </div>
 
             <div class="help-group">
-              <h4>Vues & Affichage</h4>
-              <div class="help-row"><kbd>I</kbd> <span>Perspective isométrique 3D</span></div>
-              <div class="help-row"><kbd>T</kbd> <span>Vue zénithale (Top-down)</span></div>
-              <div class="help-row"><kbd>H</kbd> <span>Mode Zen (Masquer l'interface)</span></div>
-              <div class="help-row"><kbd>M</kbd> <span>Couper / Activer les effets sonores</span></div>
+              <h4>Views</h4>
+              <div class="help-row"><kbd>I</kbd> <span>Isometric 3D view</span></div>
+              <div class="help-row"><kbd>T</kbd> <span>Top-down plan</span></div>
+              <div class="help-row"><kbd>H</kbd> <span>Zen mode (hide the interface)</span></div>
+              <div class="help-row"><kbd>M</kbd> <span>Mute or unmute sound effects</span></div>
             </div>
 
             <div class="help-group">
-              <h4>Contrôles 3D Souris / Tactile</h4>
-              <div class="help-row"><span class="help-mouse-icon">🖱️ Clic gauche</span> <span>Rotation orbitale</span></div>
-              <div class="help-row"><span class="help-mouse-icon">🖱️ Molette</span> <span>Zoom avant / arrière</span></div>
-              <div class="help-row"><span class="help-mouse-icon">🖱️ Clic droit</span> <span>Panoramique (Déplacement)</span></div>
-              <div class="help-row"><span class="help-mouse-icon">👆 Pinch</span> <span>Zoom sur mobile & tablette</span></div>
+              <h4>3D controls — mouse and touch</h4>
+              <div class="help-row"><span class="help-mouse-icon">🖱️ Left click</span> <span>Orbit</span></div>
+              <div class="help-row"><span class="help-mouse-icon">🖱️ Wheel</span> <span>Zoom in and out</span></div>
+              <div class="help-row"><span class="help-mouse-icon">🖱️ Right click</span> <span>Pan</span></div>
+              <div class="help-row"><span class="help-mouse-icon">👆 Pinch</span> <span>Zoom on phone and tablet</span></div>
             </div>
           </div>
         </div>
@@ -406,11 +419,11 @@
           <p class="boot-subtitle">SEE a Better Future</p>
           <div class="boot-track"><div id="boot-bar" class="boot-bar"></div></div>
           <div class="boot-meta">
-            <span id="boot-label" class="boot-label">CHARGEMENT DU CAMPUS — 0%</span>
-            <span id="boot-message" class="boot-message">Initialisation du jumeau numérique 3D…</span>
+            <span id="boot-label" class="boot-label">LOADING THE CAMPUS — 0%</span>
+            <span id="boot-message" class="boot-message">Starting the 3D digital twin…</span>
           </div>
           <button id="boot-enter-btn" class="boot-enter-btn" type="button" hidden>
-            ENTRER DANS LE CAMPUS NETIS →
+            ENTER THE NETIS CAMPUS →
           </button>
         </div>
       </div>

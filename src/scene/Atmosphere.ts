@@ -27,6 +27,10 @@ export class Atmosphere {
   readonly ambient = new THREE.AmbientLight(0xffffff, RENDER.sun.ambient)
   private readonly sunDir = new THREE.Vector3()
   private readonly shadowFocus = new THREE.Vector3()
+  private readonly shadowSnap = new THREE.Vector3()
+  private readonly shadowRight = new THREE.Vector3()
+  private readonly shadowUp = new THREE.Vector3()
+  private readonly shadowLook = new THREE.Vector3()
   private shadowExtent = 0
   private readonly scene: THREE.Scene
   private readonly pmrem: THREE.PMREMGenerator
@@ -82,7 +86,7 @@ export class Atmosphere {
     this.sun.shadow.mapSize.set(RENDER.shadow.mapSize, RENDER.shadow.mapSize)
     this.sun.shadow.bias = RENDER.shadow.bias
     this.sun.shadow.normalBias = RENDER.shadow.normalBias
-    // r185 PCF ignores radius (PCFSoft was rewritten to PCF). Harmless no-op.
+    this.sun.shadow.radius = RENDER.shadow.radius
     this.sun.shadow.camera.near = RENDER.shadow.cameraNear
     this.sun.shadow.camera.far = RENDER.shadow.cameraFar
     this.setShadowExtent(320)
@@ -124,7 +128,7 @@ export class Atmosphere {
       if (this.envMap) this.envMap.dispose()
       this.envMap = env
       this.scene.environment = env
-      this.scene.environmentIntensity = 1.18
+      this.scene.environmentIntensity = 0.8
       if (peak) {
         this.scene.environmentRotation.set(0, yawToAlign(this.sunDir, peak.dir), 0)
       }
@@ -185,7 +189,7 @@ export class Atmosphere {
     this.fill.position.copy(center).add(new THREE.Vector3(-120, 100, 150))
     this.fill.target.position.copy(center)
     this.fill.target.updateMatrixWorld()
-    this.updateFocusedShadows(center, campusRadius * 0.9, true)
+    this.updateFocusedShadows(center, campusRadius * 0.9, 0, true)
   }
 
   /**
@@ -212,26 +216,59 @@ export class Atmosphere {
   /**
    * Tighten the sun ortho around the current look-at so close-ups get
    * centimetre-scale shadow texels instead of a campus-wide 2048 map.
-   * Returns true when the frustum changed (caller should flag shadowMap.needsUpdate).
+   * The frustum eases toward the camera and snaps to texel boundaries so
+   * panning does not swim and stopping does not pop.
    */
-  updateFocusedShadows(focus: THREE.Vector3, cameraDistance: number, force = false) {
-    const extent = THREE.MathUtils.clamp(
+  updateFocusedShadows(focus: THREE.Vector3, cameraDistance: number, dt = 0, force = false) {
+    const targetExtent = THREE.MathUtils.clamp(
       cameraDistance * RENDER.shadow.focusDistanceScale,
       RENDER.shadow.focusMin,
       RENDER.shadow.focusMax,
     )
-    const moved = this.shadowFocus.distanceToSquared(focus) > RENDER.shadow.moveThreshold ** 2
-    const zoomed = Math.abs(extent - this.shadowExtent) > RENDER.shadow.extentThreshold
-    if (!force && !moved && !zoomed) return false
+    const first = this.shadowExtent <= 0
+    if (force || first) {
+      this.shadowFocus.copy(focus)
+      this.shadowExtent = targetExtent
+    } else {
+      const follow = 1 - Math.exp(-Math.max(0, dt) * 5)
+      this.shadowFocus.lerp(focus, follow)
+      this.shadowExtent += (targetExtent - this.shadowExtent) * follow
+    }
 
-    this.shadowFocus.copy(focus)
-    this.shadowExtent = extent
-    this.setShadowExtent(extent)
-    const reach = Math.max(420, extent * 3.1)
-    this.sun.position.copy(this.sunDir).multiplyScalar(reach).add(focus)
-    this.sun.target.position.copy(focus)
+    this.shadowExtent = THREE.MathUtils.clamp(
+      this.shadowExtent,
+      RENDER.shadow.focusMin,
+      RENDER.shadow.focusMax,
+    )
+    const snapped = this.snapShadowFocus(this.shadowFocus, this.shadowExtent)
+    this.setShadowExtent(this.shadowExtent)
+    const reach = Math.max(420, this.shadowExtent * 3.1)
+    this.sun.position.copy(this.sunDir).multiplyScalar(reach).add(snapped)
+    this.sun.target.position.copy(snapped)
     this.sun.target.updateMatrixWorld()
     return true
+  }
+
+  /** Quantize the shadow origin in light space so texels do not crawl while panning. */
+  private snapShadowFocus(focus: THREE.Vector3, extent: number) {
+    const mapSize = Math.max(1, this.sun.shadow.mapSize.x)
+    const texel = (extent * 2) / mapSize
+    this.shadowLook.copy(this.sunDir).negate()
+    const vertical = Math.abs(this.shadowLook.y) > 0.96
+    this.shadowUp.set(0, vertical ? 0 : 1, vertical ? 1 : 0)
+    this.shadowRight.crossVectors(this.shadowLook, this.shadowUp)
+    if (this.shadowRight.lengthSq() < 1e-8) this.shadowRight.set(1, 0, 0)
+    this.shadowRight.normalize()
+    this.shadowUp.crossVectors(this.shadowRight, this.shadowLook).normalize()
+
+    const x = Math.round(focus.dot(this.shadowRight) / texel) * texel
+    const y = Math.round(focus.dot(this.shadowUp) / texel) * texel
+    const along = focus.dot(this.shadowLook)
+    return this.shadowSnap
+      .copy(this.shadowRight)
+      .multiplyScalar(x)
+      .addScaledVector(this.shadowUp, y)
+      .addScaledVector(this.shadowLook, along)
   }
 
   get sunDirection() {
@@ -413,7 +450,7 @@ export class Atmosphere {
       if (!this.envMap) {
         this.envMap = skyEnv
         this.scene.environment = skyEnv
-        this.scene.environmentIntensity = Math.max(1.15, preset.env * 2.2)
+        this.scene.environmentIntensity = 0.8
       } else {
         skyEnv.dispose()
       }
@@ -439,7 +476,7 @@ export class Atmosphere {
       }
 
       if (this.scene.fog instanceof THREE.Fog && this.hdriHorizon) {
-        this.scene.fog.color.copy(this.hdriHorizon)
+        this.scene.fog.color.copy(this.hazeColor)
       }
       this.applyMaskedBackground()
       console.info(
@@ -505,7 +542,7 @@ export class Atmosphere {
     if (this.envMap) this.envMap.dispose()
     this.envMap = env
     this.scene.environment = env
-    this.scene.environmentIntensity = 1.22
+    this.scene.environmentIntensity = 0.8
   }
 }
 
@@ -526,12 +563,13 @@ function fogRangeForDistance(distance: number) {
   const u = THREE.MathUtils.smoothstep(x, a.d, b.d)
   let near = THREE.MathUtils.lerp(a.near, b.near, u)
   let far = THREE.MathUtils.lerp(a.far, b.far, u)
-  near = Math.max(near, RENDER.fog.nearMin, distance * 1.85 + 40)
-  far = Math.max(far, RENDER.fog.farMin, near + 420)
-  // Aerial views: pull fog in so the countryside edge melts into the sky.
+  near = Math.max(near, RENDER.fog.nearMin, distance * 2.15 + 80, 640)
+  far = Math.max(far, RENDER.fog.farMin, near + 1100)
+  // Keep mid-distance façades in color. Haze only the true horizon.
   if (distance > 120) {
-    far = Math.min(far, 1550 + distance * 0.85)
-    near = Math.min(near, far - 380)
+    near = Math.max(near, distance * 2.6 + 320)
+    far = Math.max(far, near + 1100)
+    far = Math.min(far, 3200)
   }
   return { near, far }
 }

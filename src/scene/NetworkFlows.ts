@@ -1,7 +1,65 @@
 import * as THREE from 'three'
+import { pylonIncomerPaths, substationOutletPaths, yardBusPaths } from './PowerLines'
 
 function blenderToThree(x: number, y: number, z: number) {
   return new THREE.Vector3(x, z, -y)
+}
+
+/**
+ * The MV line is fed from the source substation, on the crossbeam north of
+ * the yard. Spans east of that outlet are not part of the campus feed.
+ */
+const SUBSTATION_TAP = { x: 122, y: 336 }
+const EAST_OF_SUBSTATION = 132
+
+function distanceToTap(point: number[]) {
+  const dx = point[0] - SUBSTATION_TAP.x
+  const dy = point[1] - SUBSTATION_TAP.y
+  return dx * dx + dy * dy
+}
+
+function pathLength(path: number[][]) {
+  let length = 0
+  for (let i = 1; i < path.length; i++) {
+    const dx = path[i][0] - path[i - 1][0]
+    const dy = path[i][1] - path[i - 1][1]
+    const dz = path[i][2] - path[i - 1][2]
+    length += Math.hypot(dx, dy, dz)
+  }
+  return length
+}
+
+/**
+ * Pulse travels from path start to path end. Keep the end nearer the
+ * substation as the start, and drop the cables that continue east of it.
+ */
+function feedFromSubstation(paths: number[][][]) {
+  const fed: number[][][] = []
+  for (const path of paths) {
+    const kept = path.filter((point) => point[0] <= EAST_OF_SUBSTATION)
+    if (kept.length < 2) continue
+
+    let closest = 0
+    let best = Infinity
+    for (let i = 0; i < kept.length; i++) {
+      const distance = distanceToTap(kept[i])
+      if (distance < best) {
+        best = distance
+        closest = i
+      }
+    }
+
+    const towardStart = kept.slice(0, closest + 1).reverse()
+    const towardEnd = kept.slice(closest)
+    for (const ray of [towardStart, towardEnd]) {
+      if (ray.length < 2 || pathLength(ray) < 8) continue
+      const end = ray[ray.length - 1]
+      const start = ray[0]
+      if (end[0] > start[0] + 3 && end[0] > SUBSTATION_TAP.x) continue
+      fed.push(ray)
+    }
+  }
+  return fed
 }
 
 export interface FlowPathData {
@@ -219,8 +277,21 @@ export class NetworkFlows {
   private buildFlows(data: NetworkFlowsJson) {
     for (const flow of data.flows) {
       const threePaths: THREE.Vector3[][] = []
+      let sourcePaths = flow.paths
+      if (flow.kind === 'power') {
+        sourcePaths = feedFromSubstation(sourcePaths)
+        if (flow.placement === 'aerial') {
+          const asPoints = (path: readonly (readonly number[])[]) => path.map((point) => [...point])
+          sourcePaths = [
+            ...pylonIncomerPaths().map(asPoints),
+            ...yardBusPaths().map(asPoints),
+            ...substationOutletPaths().map(asPoints),
+            ...sourcePaths,
+          ]
+        }
+      }
 
-      for (const path of flow.paths) {
+      for (const path of sourcePaths) {
         if (path.length < 2) continue
         const converted = path.map(([bx, by, bz]) => {
           const v = blenderToThree(bx, by, bz)
@@ -236,10 +307,11 @@ export class NetworkFlows {
       const geo = buildMergedTubeGeometry(threePaths, radius, isUnderground ? 8 : 6)
       if (!geo) continue
 
-      // Colors: Cyan for fiber (#4ec3c7), Amber for power (#e0a03c)
+      // Aerial and underground use different hues so the two installations
+      // stay readable: cyan / violet for fibre, amber / red for power.
       const baseColor = isFiber
-        ? (isUnderground ? new THREE.Color('#38b2b8') : new THREE.Color('#4ec3c7'))
-        : (isUnderground ? new THREE.Color('#d48a28') : new THREE.Color('#e0a03c'))
+        ? (isUnderground ? new THREE.Color('#b06cff') : new THREE.Color('#4ec3c7'))
+        : (isUnderground ? new THREE.Color('#ff5a4a') : new THREE.Color('#f0b429'))
 
       const mat = new THREE.ShaderMaterial({
         vertexShader: FLOW_VERTEX_SHADER,

@@ -112,14 +112,13 @@ export class PostProcessing {
     const width = window.innerWidth
     const height = window.innerHeight
     const pr = renderer.getPixelRatio()
+    const samples = supportedHalfFloatSamples(renderer, RENDER.msaaSamples)
 
-    const rt = new THREE.WebGLRenderTarget(width * pr, height * pr, {
-      type: THREE.HalfFloatType,
-      depthBuffer: true,
-      stencilBuffer: false,
-    })
-
-    this.composer = new EffectComposer(renderer, rt)
+    this.composer = new EffectComposer(renderer)
+    this.composer.renderTarget1.samples = samples
+    this.composer.renderTarget2.samples = samples
+    this.composer.setPixelRatio(pr)
+    this.composer.setSize(width, height)
 
     this.renderPass = new RenderPass(scene, camera)
     this.composer.addPass(this.renderPass)
@@ -149,6 +148,8 @@ export class PostProcessing {
     )
     this.composer.addPass(this.bloomPass)
 
+    // SMAA reads linear color. After OutputPass the edges are already
+    // tone-mapped and the morphological search misses them.
     this.smaaPass = new SMAAPass()
     this.smaaPass.setSize(width * pr, height * pr)
     this.composer.addPass(this.smaaPass)
@@ -181,21 +182,29 @@ export class PostProcessing {
     this.gradePass.uniforms.resolution.value.set(width * pr, height * pr)
   }
 
-  setMoving(isMoving: boolean) {
-    // Contact AO and bloom are the expensive passes. Drop both while the
-    // camera flies or orbits, then restore the settled look.
-    this.gtaoPass.enabled = !isMoving
-    this.bloomPass.enabled = !isMoving
-    if (!isMoving) {
-      this.gtaoPass.blendIntensity = RENDER.ao.blendIntensity
-      this.gtaoPass.updateGtaoMaterial({ samples: RENDER.ao.samples })
-      this.bloomPass.strength = RENDER.bloom.strength
-      this.bloomPass.radius = RENDER.bloom.radius
-      this.bloomPass.threshold = RENDER.bloom.threshold
-    }
-  }
-
   render() {
     this.composer.render()
   }
+}
+
+/** 4x MSAA on the HDR buffer, or 0 when the GPU cannot multisample RGBA16F. */
+function supportedHalfFloatSamples(renderer: THREE.WebGLRenderer, requested: number) {
+  const max = renderer.capabilities.maxSamples
+  if (!requested || !max) return 0
+  const gl = renderer.getContext() as WebGL2RenderingContext
+  if (typeof gl.getInternalformatParameter !== 'function') return 0
+  let counts: Int32Array
+  try {
+    counts = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) as Int32Array
+  } catch {
+    return 0
+  }
+  if (!counts?.length) return 0
+  let best = 0
+  const cap = Math.min(requested, max)
+  for (let i = 0; i < counts.length; i++) {
+    const n = counts[i] ?? 0
+    if (n > 0 && n <= cap && n > best) best = n
+  }
+  return best
 }
