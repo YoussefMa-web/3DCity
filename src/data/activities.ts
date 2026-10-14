@@ -413,14 +413,14 @@ export const ACTIVITIES: Activity[] = [
     id: 'data-shell',
     brand: 'telecom',
     title: 'Data center',
-    kicker: 'Building · 10 DCF packages',
+    kicker: 'DCF-00 → DCF-09 · IT-01 · RES · SEC',
     summary:
-      'Envelope and technical room: foundations, heavy slab, penetrations, waterproofing. Packages DCF-00 to DCF-09: containment, cooling, fire, power, raised floor.',
+      'The technical hall as one schematic: DCF-00 shell, DCF-01 cold aisle, DCF-02 cooling, DCF-03 fire, DCF-05 UPS, DCF-07 LV board, DCF-08 raised floor, DCF-09 fit-out, plus IT-01, RES-01, RES-02 and SEC-01.',
     points: [
-      'Turnkey engineering through to acceptance',
-      'Rack layout and cold-aisle containment',
-      'Precision cooling, free-cooling, in-row',
-      'Continuity: transformer, generator, UPS, LV board',
+      'DCF-00 shell and technical hall',
+      'DCF-01 containment, DCF-02 cooling, DCF-03 fire',
+      'DCF-05 UPS, DCF-07 LV board, DCF-08 floor, DCF-09 fit-out',
+      'IT-01 servers, RES-01 network, RES-02 DCIM, SEC-01 video',
     ],
     stats: [
       { value: '10 packages', label: 'DCF-00 → 09' },

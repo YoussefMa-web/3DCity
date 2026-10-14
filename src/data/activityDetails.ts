@@ -228,8 +228,8 @@ export function applyActivityDetails(activities: Activity[]) {
       enterInterior: true,
       benefits: ['From civil works to acceptance, one technical package'],
       places: [
-        place(sourceOf('data-shell'), 'shell', 'Envelope', 'Foundations, heavy slab, penetrations and waterproofing. Ten DCF packages structure the room.', ['DCF-00 to DCF-09', 'Tier III target', 'PUE 1.32 tracked at the NOC'], 0.22, -16, 4, 38),
-        place(sourceOf('data-shell'), 'hall', 'Hall', 'Selecting the data center opens the room already modelled: racks, cooling, power and security.', ['Opens with the step', 'Only equipment that is present', 'No second model'], 0.4, 10, 6, 34),
+        place(sourceOf('data-shell'), 'shell', 'DCF-00 — Shell', 'Foundations, heavy slab, penetrations and waterproofing. The packages inside keep their schematic names.', ['DCF-00 shell', 'DCF-01 to DCF-09', 'Tier III target'], 0.22, -16, 4, 38),
+        place(sourceOf('data-shell'), 'hall', 'Technical hall', 'Opens the modelled room. Each step is one package: containment, IT, cooling, fire, UPS, LV board, floor, network, DCIM, video, fit-out.', ['DCF-01 cold aisle', 'IT-01 / RES-01 / RES-02 / SEC-01', 'Only equipment that is loaded'], 0.4, 10, 6, 34),
       ],
     },
     'data-genset': {

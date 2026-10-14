@@ -40,12 +40,6 @@ const LAMP_MAST_NAME = /^EclS_Mat/i
 const LAMP_HEAD_NAME = /^EclS_Tete/i
 /** Arm vertices sit past this distance from the shaft axis. The shaft itself stays under ~0.1 m. */
 const LAMP_ARM_RADIUS = 0.35
-/** Heads farther than this (metres, horizontal) belong to another pole, or to none. */
-const LAMP_PAIR_DISTANCE = 4
-/** How far the arm root sinks into the shaft so the joint reads as welded. */
-const LAMP_ARM_SINK = 0.03
-/** Head-to-tip gaps at or under this stay as a seated joint. */
-const LAMP_HEAD_GAP = 0.04
 
 const lampA = new THREE.Vector3()
 const lampB = new THREE.Vector3()
@@ -53,60 +47,55 @@ const lampC = new THREE.Vector3()
 const lampSep = new THREE.Vector3()
 
 /**
- * KitBash street lights ship the curved arm in the mast mesh, about 70 cm clear of
- * the shaft, and the luminaire is a sibling node parked on that floating tip.
- * Slide the arm onto the shaft and carry each paired head with it. Shared copies
- * of the mast geometry get one correction.
+ * The mast mesh already contains the curved arm. The luminaire is a sibling
+ * whose origin sits away from the glass, so it reads as a floating box.
+ * Pair each head with the mast of the same index and sleeve it onto the arm tip.
+ * The mast geometry is shared, so it is never rewritten.
  */
 export function seatStreetLamps(root: THREE.Object3D) {
   root.updateMatrixWorld(true)
   const masts: THREE.Mesh[] = []
-  const heads: THREE.Mesh[] = []
+  const heads = new Map<string, THREE.Mesh[]>()
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh
     if (!mesh.isMesh) return
     if (LAMP_MAST_NAME.test(mesh.name)) masts.push(mesh)
-    else if (LAMP_HEAD_NAME.test(mesh.name)) heads.push(mesh)
+    else if (LAMP_HEAD_NAME.test(mesh.name)) {
+      const key = lampPairKey(mesh.name)
+      const list = heads.get(key)
+      if (list) list.push(mesh)
+      else heads.set(key, [mesh])
+    }
   })
 
-  for (const mast of masts) seatLampArm(mast.geometry)
-
-  for (const head of heads) {
-    if (head.userData.lampHeadSeated) continue
-    head.getWorldPosition(lampA)
-    let best: THREE.Mesh | null = null
-    let bestD = LAMP_PAIR_DISTANCE
-    for (const mast of masts) {
-      mast.getWorldPosition(lampB)
-      const d = Math.hypot(lampA.x - lampB.x, lampA.z - lampB.z)
-      if (d < bestD) {
-        bestD = d
-        best = mast
-      }
+  for (const mast of masts) {
+    const pair = heads.get(lampPairKey(mast.name))
+    if (!pair?.length) continue
+    const tip = armTipWorld(mast)
+    if (!tip) continue
+    for (const head of pair) {
+      if (head.userData.lampHeadSeated) continue
+      snapHeadToTip(head, mast, tip)
+      head.userData.lampHeadSeated = true
     }
-    if (!best) continue
-    const delta = best.geometry.userData.lampArmDelta as THREE.Vector3 | undefined
-    if (delta && delta.lengthSq() > 1e-8) {
-      best.updateWorldMatrix(true, false)
-      lampB.set(0, 0, 0).applyMatrix4(best.matrixWorld)
-      lampC.copy(delta).applyMatrix4(best.matrixWorld).sub(lampB)
-      addWorldDelta(head, lampC)
-    }
-    seatLampHead(head, best)
-    head.userData.lampHeadSeated = true
   }
 }
 
-function seatLampArm(geometry: THREE.BufferGeometry) {
-  if (geometry.userData.lampArmDelta) return
-  const attr = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
-  if (!attr || attr.count < 8) {
-    geometry.userData.lampArmDelta = new THREE.Vector3()
-    return
-  }
+function lampPairKey(name: string) {
+  return name.replace(/^EclS_(?:Mat|Tete)_/i, '').toLowerCase()
+}
 
+/** Farthest point from the shaft, in the top of the mast. That is the arm tip. */
+function armTipWorld(mast: THREE.Mesh) {
+  const attr = mast.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!attr || attr.count < 8) return null
   let minY = Infinity
-  for (let i = 0; i < attr.count; i++) minY = Math.min(minY, attr.getY(i))
+  let maxY = -Infinity
+  for (let i = 0; i < attr.count; i++) {
+    const y = attr.getY(i)
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+  }
   let ax = 0
   let az = 0
   let baseN = 0
@@ -116,75 +105,44 @@ function seatLampArm(geometry: THREE.BufferGeometry) {
     az += attr.getZ(i)
     baseN++
   }
-  if (!baseN) {
-    geometry.userData.lampArmDelta = new THREE.Vector3()
-    return
-  }
+  if (!baseN) return null
   ax /= baseN
   az /= baseN
-
-  const radiusAt = (i: number) => Math.hypot(attr.getX(i) - ax, attr.getZ(i) - az)
-  let root = -1
-  let minArm = Infinity
-  let maxArm = -1
-  for (let i = 0; i < attr.count; i++) {
-    const r = radiusAt(i)
-    if (r <= LAMP_ARM_RADIUS || attr.getY(i) < 0.4) continue
-    if (r < minArm) {
-      minArm = r
-      root = i
-    }
-    if (r > maxArm) maxArm = r
-  }
-  if (root < 0 || maxArm < 0) {
-    geometry.userData.lampArmDelta = new THREE.Vector3()
-    return
-  }
-
-  const rootY = attr.getY(root)
-  let poleR = 0
-  for (let i = 0; i < attr.count; i++) {
-    const r = radiusAt(i)
-    if (r < 0.25 && Math.abs(attr.getY(i) - rootY) < 0.25) poleR = Math.max(poleR, r)
-  }
-  const gap = minArm - poleR
-  const delta = new THREE.Vector3()
-  if (poleR > 0.02 && gap > LAMP_HEAD_GAP) {
-    const dx = ax - attr.getX(root)
-    const dz = az - attr.getZ(root)
-    const len = Math.hypot(dx, dz) || 1
-    const move = gap + LAMP_ARM_SINK
-    delta.set((dx / len) * move, 0, (dz / len) * move)
-  }
-
+  const yCut = minY + (maxY - minY) * 0.72
+  let maxR = 0
   let tx = 0
   let ty = 0
   let tz = 0
-  let tn = 0
   for (let i = 0; i < attr.count; i++) {
-    if (radiusAt(i) < maxArm - 0.08 || attr.getY(i) < 0.4) continue
-    tx += attr.getX(i)
-    ty += attr.getY(i)
-    tz += attr.getZ(i)
-    tn++
+    if (attr.getY(i) < yCut) continue
+    const r = Math.hypot(attr.getX(i) - ax, attr.getZ(i) - az)
+    if (r <= maxR) continue
+    maxR = r
+    tx = attr.getX(i)
+    ty = attr.getY(i)
+    tz = attr.getZ(i)
   }
+  if (maxR < LAMP_ARM_RADIUS) return null
+  mast.updateWorldMatrix(true, false)
+  return new THREE.Vector3(tx, ty, tz).applyMatrix4(mast.matrixWorld)
+}
 
-  if (delta.lengthSq() > 0) {
-    for (let i = 0; i < attr.count; i++) {
-      if (radiusAt(i) <= LAMP_ARM_RADIUS || attr.getY(i) < 0.4) continue
-      attr.setXYZ(i, attr.getX(i) + delta.x, attr.getY(i), attr.getZ(i) + delta.z)
-    }
-    attr.needsUpdate = true
-    geometry.computeBoundingBox()
-    geometry.computeBoundingSphere()
-  }
-
-  geometry.userData.lampArmDelta = delta
-  geometry.userData.lampArmTip = new THREE.Vector3(
-    (tn ? tx / tn : 0) + delta.x,
-    tn ? ty / tn : 0,
-    (tn ? tz / tn : 0) + delta.z,
-  )
+function snapHeadToTip(head: THREE.Mesh, mast: THREE.Mesh, tipWorld: THREE.Vector3) {
+  head.updateWorldMatrix(true, true)
+  const box = new THREE.Box3().setFromObject(head)
+  if (box.isEmpty()) return
+  const center = box.getCenter(new THREE.Vector3())
+  mast.getWorldPosition(lampB)
+  lampC.copy(tipWorld).sub(lampB)
+  lampC.y = 0
+  if (lampC.lengthSq() < 1e-4) return
+  lampC.normalize()
+  box.getSize(lampSep)
+  const along = Math.abs(lampC.x) * lampSep.x + Math.abs(lampC.z) * lampSep.z
+  const shift = Math.max(0.02, along * 0.5 - 0.06)
+  const desired = tipWorld.clone().addScaledVector(lampC, shift)
+  desired.y = tipWorld.y
+  addWorldDelta(head, desired.sub(center))
 }
 
 function addWorldDelta(obj: THREE.Object3D, worldDelta: THREE.Vector3) {
@@ -197,32 +155,6 @@ function addWorldDelta(obj: THREE.Object3D, worldDelta: THREE.Vector3) {
   }
   parent.worldToLocal(lampA)
   obj.position.copy(lampA)
-}
-
-/** Slide a luminaire that still misses the arm tip (sideways or vertically) onto that tip. */
-function seatLampHead(head: THREE.Mesh, mast: THREE.Mesh) {
-  const tip = mast.geometry.userData.lampArmTip as THREE.Vector3 | undefined
-  if (!tip) return
-  head.updateWorldMatrix(true, false)
-  mast.updateWorldMatrix(true, false)
-  lampA.copy(tip).applyMatrix4(mast.matrixWorld)
-  head.worldToLocal(lampA)
-  const geo = head.geometry
-  if (!geo.boundingBox) geo.computeBoundingBox()
-  const bb = geo.boundingBox
-  if (!bb) return
-  lampSep.set(0, 0, 0)
-  if (lampA.x < bb.min.x) lampSep.x = lampA.x - bb.min.x
-  else if (lampA.x > bb.max.x) lampSep.x = lampA.x - bb.max.x
-  if (lampA.y < bb.min.y) lampSep.y = lampA.y - bb.min.y
-  else if (lampA.y > bb.max.y) lampSep.y = lampA.y - bb.max.y
-  if (lampA.z < bb.min.z) lampSep.z = lampA.z - bb.min.z
-  else if (lampA.z > bb.max.z) lampSep.z = lampA.z - bb.max.z
-  if (lampSep.length() <= LAMP_HEAD_GAP) return
-  lampSep.addScaledVector(lampSep.clone().normalize(), 0.012)
-  lampB.set(0, 0, 0).applyMatrix4(head.matrixWorld)
-  lampC.copy(lampSep).applyMatrix4(head.matrixWorld).sub(lampB)
-  addWorldDelta(head, lampC)
 }
 
 const GROUND_MESH = /^(trettoir|asphalte|voirie)$/i
@@ -415,6 +347,18 @@ function tuneGroundMaterial(source: THREE.Material, mesh: THREE.Mesh, anisotropy
     next.polygonOffset = true
     next.polygonOffsetFactor = 1
     next.polygonOffsetUnits = 1
+    if (isSidewalkSlab(mesh)) {
+      next.roughness = Math.max(next.roughness ?? 0, 0.9)
+      next.metalness = 0
+      next.envMapIntensity = Math.min(next.envMapIntensity || 0.35, 0.4)
+      if (next.map && next.map.repeat.x <= 2) {
+        const map = next.map.clone()
+        map.wrapS = map.wrapT = THREE.RepeatWrapping
+        map.repeat.multiplyScalar(2)
+        map.needsUpdate = true
+        next.map = map
+      }
+    }
     stabilizePhysical(next)
     next.needsUpdate = true
     return next
@@ -642,7 +586,7 @@ function roundSidewalkNose(mesh: THREE.Mesh) {
       { x: lip.bx, y: lip.by, z: lip.bz },
     ]
     for (const origin of ends) {
-      const radius = lip.span
+      const radius = Math.min(0.09, Math.max(0.04, lip.span))
       for (let s = 0; s <= steps; s++) {
         const ang = (s / steps) * (Math.PI / 2)
         positions.push(
@@ -671,7 +615,7 @@ function roundSidewalkNose(mesh: THREE.Mesh) {
     curbGeo,
     new THREE.MeshStandardMaterial({
       name: 'sidewalk-curb',
-      color: 0xe4e0d8,
+      color: 0xb7b2a8,
       roughness: 0.94,
       metalness: 0,
       envMapIntensity: 0.28,
@@ -698,6 +642,9 @@ function dropVerticalFaces(mesh: THREE.Mesh) {
   const groups = geo.groups.length
     ? geo.groups.slice()
     : [{ start: 0, count: index.count, materialIndex: 0 }]
+  let maxY = -Infinity
+  for (let i = 0; i < position.count; i++) maxY = Math.max(maxY, position.getY(i))
+  const keepBelow = maxY - 0.1
   const next: number[] = []
   geo.clearGroups()
   for (const group of groups) {
@@ -712,7 +659,8 @@ function dropVerticalFaces(mesh: THREE.Mesh) {
       if (!grass) {
         triangleNormal(position, ia, ib, ic, triN)
         const len = triN.length() || 1
-        if (Math.abs(triN.y / len) < 0.35) continue
+        const top = Math.max(position.getY(ia), position.getY(ib), position.getY(ic))
+        if (Math.abs(triN.y / len) < 0.35 && top > keepBelow) continue
       }
       next.push(ia, ib, ic)
     }
@@ -908,17 +856,22 @@ function tuneMaterial(source: THREE.Material, mesh: THREE.Mesh, anisotropy: numb
     return mat
   }
 
-  // 3. Vehicles & automotive gloss
-  if (/vehicule|car|voiture|camion|truck|auto/i.test(label)) {
-    if (/pneu|tire|wheel|roue|rubber/i.test(label)) {
-      mat.roughness = 0.88
+  // 3. Vehicles — painted body, not chrome. KitBash names are Vehic* / CarAtlas.
+  if (/vehic|caratlas|undercarriage|licenseplate|voiture|camion/i.test(label)) {
+    const phys = mat as THREE.MeshPhysicalMaterial
+    if (/pneu|tire|wheel|roue|rubber|undercarriage/i.test(label)) {
+      mat.roughness = 0.9
       mat.metalness = 0.02
-      mat.envMapIntensity = 0.4
+      mat.envMapIntensity = 0.35
+      if (phys.isMeshPhysicalMaterial) phys.clearcoat = 0
     } else {
-      const v = RENDER.vehicle
-      mat.roughness = v.roughness
-      mat.metalness = v.metalness
-      mat.envMapIntensity = v.envMapIntensity
+      mat.roughness = 0.38
+      mat.metalness = 0.06
+      mat.envMapIntensity = 1.15
+      if (phys.isMeshPhysicalMaterial) {
+        phys.clearcoat = 0.62
+        phys.clearcoatRoughness = 0.26
+      }
     }
     mat.needsUpdate = true
     return mat
